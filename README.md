@@ -1,6 +1,6 @@
 # TaskMate - Modern Task Management System
 
-![TaskMate](https://drive.google.com/file/d/1CikiznjF3WYdUhGjbFpmRDDii5jJPBf7)
+![TaskMate](https://i.ibb.co/KjB7rRyK/Taskmate.png)
 
 TaskMate is a powerful, feature-rich task management system built with React, TypeScript, and modern web technologies. It offers a beautiful, intuitive interface for managing tasks, collaborating with team members, and tracking productivity.
 
