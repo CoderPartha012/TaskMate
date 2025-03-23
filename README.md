@@ -87,6 +87,10 @@ TaskMate is a powerful, feature-rich task management system built with React, Ty
 
 4. Open your browser and navigate to `http://localhost:5173`
 
+## 🌍 Live Demo
+
+Check out the live version of TaskMate: [TaskMate Live](https://taskmate-partha.netlify.app/)
+
 ## 📦 Project Structure
 
 ```
