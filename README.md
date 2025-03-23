@@ -106,12 +106,8 @@ src/
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
 - Icons by [Lucide](https://lucide.dev)
-- UI inspiration from modern task management apps
 - Built with [Vite](https://vitejs.dev) and [React](https://reactjs.org)
