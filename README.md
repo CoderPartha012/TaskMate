@@ -23,19 +23,11 @@ TaskMate is a powerful, feature-rich task management system built with React, Ty
 - Restore archived tasks when needed
 
 ### 📊 Analytics & Insights
-- Comprehensive analytics dashboard
 - Task completion statistics
 - Time tracking visualization
 - Task distribution by category and priority
 - Productivity trends and patterns
 - Calendar heatmap for activity tracking
-
-### 👥 Collaboration Features
-- Assign tasks to team members
-- Add comments and discussions on tasks
-- @mention team members in comments
-- Share tasks via generated links
-- Real-time updates for team collaboration
 
 ### 📱 User Interface
 - Multiple view options:
@@ -49,7 +41,6 @@ TaskMate is a powerful, feature-rich task management system built with React, Ty
 
 ### 🔄 Task Progress
 - Visual progress tracking
-- Estimated vs actual time comparison
 - Subtask completion tracking
 - Overall project progress visualization
 
