@@ -1,5 +1,4 @@
-import React, { useEffect } from 'react';
-import { Task, TaskFilter } from './types';
+import React from 'react';
 import { TaskForm } from './components/TaskForm';
 import { TaskCard } from './components/TaskCard';
 import { TaskFilters } from './components/TaskFilter';
@@ -7,6 +6,7 @@ import { TaskProgress } from './components/TaskProgress';
 import { SearchBar } from './components/SearchBar';
 import { ViewToggle } from './components/ViewToggle';
 import { KanbanBoard } from './components/KanbanBoard';
+import { Analytics } from './components/Analytics';
 import { CheckCircle2, Undo2, Redo2 } from 'lucide-react';
 import { useTaskStore } from './store/taskStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -47,6 +47,10 @@ function App() {
   const renderTaskList = () => {
     if (filters.viewMode === 'kanban') {
       return <KanbanBoard />;
+    }
+
+    if (filters.viewMode === 'analytics') {
+      return <Analytics />;
     }
 
     return (
@@ -111,9 +115,9 @@ function App() {
         </header>
 
         <div className="max-w-6xl mx-auto">
-          <TaskProgress />
-          <TaskForm />
-          <TaskFilters />
+          {filters.viewMode !== 'analytics' && <TaskProgress />}
+          {filters.viewMode !== 'analytics' && <TaskForm />}
+          {filters.viewMode !== 'analytics' && <TaskFilters />}
           
           <AnimatePresence>
             {renderTaskList()}

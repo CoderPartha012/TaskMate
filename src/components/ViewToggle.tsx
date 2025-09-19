@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, List, Calendar } from 'lucide-react';
+import { LayoutGrid, List, Calendar, TrendingUp } from 'lucide-react';
 import { ViewMode } from '../types';
 import { useTaskStore } from '../store/taskStore';
 import { motion } from 'framer-motion';
@@ -10,7 +10,8 @@ export function ViewToggle() {
   const views: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
     { mode: 'list', icon: <List className="w-5 h-5" />, label: 'List' },
     { mode: 'grid', icon: <LayoutGrid className="w-5 h-5" />, label: 'Grid' },
-    { mode: 'kanban', icon: <Calendar className="w-5 h-5" />, label: 'Kanban' }
+    { mode: 'kanban', icon: <Calendar className="w-5 h-5" />, label: 'Kanban' },
+    { mode: 'analytics', icon: <TrendingUp className="w-5 h-5" />, label: 'Portfolio' }
   ];
 
   return (
