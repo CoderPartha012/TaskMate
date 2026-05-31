@@ -1,6 +1,6 @@
 # TaskMate — Modern Task Management System
 
-![TaskMate](https://i.postimg.cc/15j6jF9R/Taskmate.png)
+![TaskMate](https://i.postimg.cc/zfSgNgcw/Taskmate.png)
 
 TaskMate is a fully-featured, dark-themed task management app built with React, TypeScript, and Vite. It combines a polished UI with smart notifications, rich analytics, drag-and-drop kanban, CSV/Excel export, and a Lighthouse performance score of **98**.
 
@@ -150,7 +150,7 @@ npm run preview
 
 ## 🌍 Live Demo
 
-[taskmate-partha.netlify.app](https://taskmate-partha.netlify.app/)
+[taskmate-partha.netlify.app](https://taskmatebypartha.netlify.app/)
 
 ---
 
