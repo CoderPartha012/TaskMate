@@ -1,75 +1,99 @@
 import React from 'react';
 import { TaskFilter } from '../types';
-import { Filter } from 'lucide-react';
 import { useTaskStore } from '../store/taskStore';
+
+const STATUS_OPTIONS: { value: TaskFilter['status']; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'in-progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+];
+
+const PRIORITY_OPTIONS: { value: TaskFilter['priority']; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
+
+const CATEGORY_OPTIONS: { value: TaskFilter['category']; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'work', label: 'Work' },
+  { value: 'personal', label: 'Personal' },
+  { value: 'urgent', label: 'Urgent' },
+  { value: 'other', label: 'Other' },
+];
+
+const SORT_OPTIONS: { value: TaskFilter['sortBy']; label: string }[] = [
+  { value: 'dueDate', label: 'Due Date' },
+  { value: 'priority', label: 'Priority' },
+  { value: 'createdAt', label: 'Created' },
+  { value: 'estimatedTime', label: 'Est. Time' },
+];
 
 export function TaskFilters() {
   const { filters, updateFilters } = useTaskStore();
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
-        <Filter className="w-5 h-5" />
-        Filter Tasks
-      </h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-          <select
-            value={filters.status}
-            onChange={(e) => updateFilters({ status: e.target.value as TaskFilter['status'] })}
-            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+    <div className="mb-6 space-y-3">
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-[11px] text-white/30 uppercase tracking-widest w-16">Status</span>
+        {STATUS_OPTIONS.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => updateFilters({ status: value })}
+            className={filters.status === value
+              ? 'text-[11px] font-semibold px-4 py-1.5 rounded-full border border-jade/30 text-jade bg-jade/10'
+              : 'text-[11px] font-semibold px-4 py-1.5 rounded-full border border-white/[0.08] text-white/40 hover:border-white/[0.15] hover:text-white/65 transition-colors'}
           >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="in-progress">In Progress</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
+            {label}
+          </button>
+        ))}
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Priority</label>
-          <select
-            value={filters.priority}
-            onChange={(e) => updateFilters({ priority: e.target.value as TaskFilter['priority'] })}
-            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-[11px] text-white/30 uppercase tracking-widest w-16">Priority</span>
+        {PRIORITY_OPTIONS.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => updateFilters({ priority: value })}
+            className={filters.priority === value
+              ? 'text-[11px] font-semibold px-4 py-1.5 rounded-full border border-jade/30 text-jade bg-jade/10'
+              : 'text-[11px] font-semibold px-4 py-1.5 rounded-full border border-white/[0.08] text-white/40 hover:border-white/[0.15] hover:text-white/65 transition-colors'}
           >
-            <option value="all">All</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </div>
+            {label}
+          </button>
+        ))}
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
-          <select
-            value={filters.category}
-            onChange={(e) => updateFilters({ category: e.target.value as TaskFilter['category'] })}
-            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-[11px] text-white/30 uppercase tracking-widest w-16">Category</span>
+        {CATEGORY_OPTIONS.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => updateFilters({ category: value })}
+            className={filters.category === value
+              ? 'text-[11px] font-semibold px-4 py-1.5 rounded-full border border-jade/30 text-jade bg-jade/10'
+              : 'text-[11px] font-semibold px-4 py-1.5 rounded-full border border-white/[0.08] text-white/40 hover:border-white/[0.15] hover:text-white/65 transition-colors'}
           >
-            <option value="all">All</option>
-            <option value="work">Work</option>
-            <option value="personal">Personal</option>
-            <option value="urgent">Urgent</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
+            {label}
+          </button>
+        ))}
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort By</label>
-          <select
-            value={filters.sortBy}
-            onChange={(e) => updateFilters({ sortBy: e.target.value as TaskFilter['sortBy'] })}
-            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-[11px] text-white/30 uppercase tracking-widest w-16">Sort</span>
+        {SORT_OPTIONS.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => updateFilters({ sortBy: value })}
+            className={filters.sortBy === value
+              ? 'text-[11px] font-semibold px-4 py-1.5 rounded-full border border-jade/30 text-jade bg-jade/10'
+              : 'text-[11px] font-semibold px-4 py-1.5 rounded-full border border-white/[0.08] text-white/40 hover:border-white/[0.15] hover:text-white/65 transition-colors'}
           >
-            <option value="dueDate">Due Date</option>
-            <option value="priority">Priority</option>
-            <option value="createdAt">Created Date</option>
-            <option value="estimatedTime">Estimated Time</option>
-          </select>
-        </div>
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

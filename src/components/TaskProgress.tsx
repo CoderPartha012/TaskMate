@@ -4,26 +4,31 @@ import { useTaskStore } from '../store/taskStore';
 
 export function TaskProgress() {
   const tasks = useTaskStore((state) => state.tasks.filter((t) => !t.archived));
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === 'completed').length;
-  const progress = totalTasks === 0 ? 0 : (completedTasks / totalTasks) * 100;
+  const total     = tasks.length;
+  const completed = tasks.filter((t) => t.status === 'completed').length;
+  const progress  = total === 0 ? 0 : (completed / total) * 100;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-        Task Progress
-      </h2>
-      <div className="relative h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+    <div className="bg-noir-700 border border-white/[0.06] rounded-xl px-5 py-4 mb-5">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-white/40">
+          Overall Progress
+        </p>
+        <span className="font-display font-bold text-sm text-jade">
+          {Math.round(progress)}%
+        </span>
+      </div>
+      <div className="h-[5px] bg-white/[0.06] rounded-full overflow-hidden">
         <motion.div
-          className="absolute h-full bg-blue-600 dark:bg-blue-500 rounded-full"
+          className="h-full bg-jade rounded-full"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
         />
       </div>
-      <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-        {completedTasks} of {totalTasks} tasks completed ({Math.round(progress)}%)
-      </div>
+      <p className="text-[10px] text-white/30 mt-1.5">
+        {completed} of {total} tasks completed
+      </p>
     </div>
   );
 }

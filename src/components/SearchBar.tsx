@@ -39,14 +39,14 @@ export function SearchBar() {
 
   return (
     <div ref={wrapperRef} className="relative w-full max-w-md">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+      <div className="flex items-center gap-2 bg-noir-700 border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white/35 w-full sm:w-48">
+        <Search className="w-3.5 h-3.5 shrink-0" />
         <input
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search tasks..."
-          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="bg-transparent outline-none w-full placeholder:text-white/25 text-white/70"
         />
       </div>
 
@@ -56,7 +56,7 @@ export function SearchBar() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700"
+            className="absolute z-10 w-full mt-1 bg-noir-700 border border-white/[0.08] rounded-lg shadow-xl overflow-hidden"
           >
             {suggestions.map((suggestion, index) => (
               <button
@@ -65,7 +65,7 @@ export function SearchBar() {
                   setSearchTerm(suggestion);
                   setIsOpen(false);
                 }}
-                className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-white first:rounded-t-lg last:rounded-b-lg"
+                className="w-full px-4 py-2 text-left text-[12px] text-white/70 hover:bg-white/5 transition-colors"
               >
                 {suggestion}
               </button>

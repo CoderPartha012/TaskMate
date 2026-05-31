@@ -1,23 +1,37 @@
-import React, { useEffect } from 'react';
-import { Task, TaskFilter } from './types';
+import React, { Suspense, lazy } from 'react';
 import { TaskForm } from './components/TaskForm';
 import { TaskCard } from './components/TaskCard';
 import { TaskFilters } from './components/TaskFilter';
 import { TaskProgress } from './components/TaskProgress';
 import { SearchBar } from './components/SearchBar';
 import { ViewToggle } from './components/ViewToggle';
-import { KanbanBoard } from './components/KanbanBoard';
-import { CheckCircle2, Undo2, Redo2 } from 'lucide-react';
+import { NotificationPanel } from './components/NotificationPanel';
+import { CheckCircle2, Undo2, Redo2, Download } from 'lucide-react';
 import { useTaskStore } from './store/taskStore';
+import { useNotificationChecker } from './hooks/useNotificationChecker';
+import { useBrowserNotifications } from './hooks/useBrowserNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Heavy components — loaded only when first needed
+const KanbanBoard  = lazy(() => import('./components/KanbanBoard').then(m => ({ default: m.KanbanBoard })));
+const Analytics    = lazy(() => import('./components/Analytics').then(m => ({ default: m.Analytics })));
+const ExportModal  = lazy(() => import('./components/ExportModal').then(m => ({ default: m.ExportModal })));
+
+function ChunkLoader() {
+  return (
+    <div className="flex items-center justify-center py-20 text-white/25 text-xs">
+      Loading…
+    </div>
+  );
+}
+
 function App() {
-  const {
-    tasks,
-    filters,
-    undo,
-    redo,
-  } = useTaskStore();
+  useNotificationChecker();
+  useBrowserNotifications();
+
+  const [showExport, setShowExport] = React.useState(false);
+
+  const { tasks, filters, undo, redo } = useTaskStore();
 
   const filteredAndSortedTasks = tasks
     .filter(task => {
@@ -32,11 +46,11 @@ function App() {
         case 'dueDate':
           return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         case 'priority': {
-          const priorityWeight = { low: 0, medium: 1, high: 2 };
-          return priorityWeight[b.priority] - priorityWeight[a.priority];
+          const w = { low: 0, medium: 1, high: 2 };
+          return w[b.priority] - w[a.priority];
         }
         case 'estimatedTime':
-          return ((b.estimatedTime || 0) - (a.estimatedTime || 0));
+          return (b.estimatedTime || 0) - (a.estimatedTime || 0);
         case 'createdAt':
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         default:
@@ -44,23 +58,35 @@ function App() {
       }
     });
 
-  const renderTaskList = () => {
+  const renderContent = () => {
+    if (filters.viewMode === 'analytics') {
+      return (
+        <Suspense fallback={<ChunkLoader />}>
+          <Analytics />
+        </Suspense>
+      );
+    }
+
     if (filters.viewMode === 'kanban') {
-      return <KanbanBoard />;
+      return (
+        <Suspense fallback={<ChunkLoader />}>
+          <KanbanBoard />
+        </Suspense>
+      );
     }
 
     return (
-      <div className={`${
-        filters.viewMode === 'grid' 
-          ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' 
+      <div className={
+        filters.viewMode === 'grid'
+          ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
           : 'space-y-4'
-      }`}>
+      }>
         {filteredAndSortedTasks.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="text-center py-8 text-gray-500 col-span-full"
+            className="text-center py-8 text-white/30 text-sm col-span-full"
           >
             No tasks found. Start by adding a new task!
           </motion.div>
@@ -74,37 +100,49 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500">
+    <div className="min-h-screen bg-noir-800">
       <div className="container mx-auto px-4 py-8">
-        <header className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+        <header className="bg-noir-900 border-b border-white/[0.07] sticky top-0 z-50 mb-8 px-4 py-3">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={undo}
+                aria-label="Undo last action"
                 className="p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white"
-                title="Undo"
               >
-                <Undo2 className="w-5 h-5" />
+                <Undo2 className="w-5 h-5" aria-hidden="true" />
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={redo}
+                aria-label="Redo last action"
                 className="p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white"
-                title="Redo"
               >
-                <Redo2 className="w-5 h-5" />
+                <Redo2 className="w-5 h-5" aria-hidden="true" />
               </motion.button>
             </div>
-            <h1 className="text-4xl font-bold text-white flex items-center justify-center gap-3">
-              <CheckCircle2 className="w-10 h-10" />
+
+            <h1 className="font-display font-black text-lg sm:text-xl text-jade tracking-tight flex items-center gap-2">
+              <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" aria-hidden="true" />
               TaskMate
             </h1>
-            <div className="w-20"></div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowExport(true)}
+                aria-label="Export tasks"
+                className="p-2 rounded-lg text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors"
+              >
+                <Download className="w-5 h-5" aria-hidden="true" />
+              </button>
+              <NotificationPanel />
+            </div>
           </div>
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between mt-6">
+
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between mt-3">
             <SearchBar />
             <ViewToggle />
           </div>
@@ -112,14 +150,27 @@ function App() {
 
         <div className="max-w-6xl mx-auto">
           <TaskProgress />
-          <TaskForm />
-          <TaskFilters />
-          
+          {filters.viewMode !== 'analytics' && (
+            <>
+              <TaskForm />
+              <TaskFilters />
+            </>
+          )}
+
           <AnimatePresence>
-            {renderTaskList()}
+            {renderContent()}
           </AnimatePresence>
         </div>
       </div>
+
+      {showExport && (
+        <Suspense fallback={null}>
+          <ExportModal
+            onClose={() => setShowExport(false)}
+            filteredTasks={filteredAndSortedTasks}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

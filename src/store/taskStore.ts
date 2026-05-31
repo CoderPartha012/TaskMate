@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Task, TaskFilter, ThemeConfig } from '../types';
 import { persist } from 'zustand/middleware';
+import { useNotificationStore } from './notificationStore';
 
 interface TaskState {
   tasks: Task[];
@@ -50,6 +51,13 @@ export const useTaskStore = create<TaskState>()(
         };
         set((state) => {
           const newTasks = [...state.tasks, task];
+          const { addNotification } = useNotificationStore.getState();
+          addNotification({
+            type: 'task_added',
+            taskId: task.id,
+            taskTitle: task.title,
+            message: `New task added — ${task.title}`,
+          });
           return {
             tasks: newTasks,
             history: {
@@ -61,9 +69,30 @@ export const useTaskStore = create<TaskState>()(
       },
       updateTask: (id, updates) => {
         set((state) => {
+          const existing = state.tasks.find((t) => t.id === id);
           const newTasks = state.tasks.map((task) =>
             task.id === id ? { ...task, ...updates } : task
           );
+
+          if (existing && updates.status && updates.status !== existing.status) {
+            const { addNotification } = useNotificationStore.getState();
+            if (updates.status === 'completed') {
+              addNotification({
+                type: 'completed',
+                taskId: id,
+                taskTitle: existing.title,
+                message: `"${existing.title}" has been completed`,
+              });
+            } else {
+              addNotification({
+                type: 'status_changed',
+                taskId: id,
+                taskTitle: existing.title,
+                message: `"${existing.title}" status changed to ${updates.status}`,
+              });
+            }
+          }
+
           return {
             tasks: newTasks,
             history: {
