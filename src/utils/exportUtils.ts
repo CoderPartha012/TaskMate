@@ -54,6 +54,33 @@ export function exportToCSV(tasks: Task[]): void {
   URL.revokeObjectURL(url);
 }
 
+// jspdf loaded dynamically — keeps it out of the initial bundle
+export async function exportToPDF(tasks: Task[]): Promise<void> {
+  const { default: jsPDF } = await import('jspdf');
+  const autoTable = (await import('jspdf-autotable')).default;
+
+  const doc = new jsPDF({ orientation: 'landscape' });
+  doc.setFontSize(14);
+  doc.text('TaskMate — Task Report', 14, 15);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text(`Generated ${format(new Date(), 'MMM d, yyyy h:mm a')} · ${tasks.length} task(s)`, 14, 21);
+
+  const rows = tasks.map(toFlatTask);
+  const headers = Object.keys(rows[0] ?? {}) as (keyof FlatTask)[];
+
+  autoTable(doc, {
+    startY: 26,
+    head: [headers],
+    body: rows.map((row) => headers.map((h) => row[h])),
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [0, 200, 150], textColor: [10, 10, 15] },
+    alternateRowStyles: { fillColor: [245, 245, 245] },
+  });
+
+  doc.save('taskmate-tasks.pdf');
+}
+
 // xlsx loaded dynamically — keeps it out of the initial bundle (~500 KB saved)
 export async function exportToExcel(tasks: Task[]): Promise<void> {
   const XLSX = await import('xlsx');

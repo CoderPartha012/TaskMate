@@ -1,24 +1,44 @@
 import { create } from 'zustand';
-import { Task, TaskFilter, ThemeConfig } from '../types';
+import { ActivityEntry, AppSection, Comment, Task, TaskFilter, ThemeConfig } from '../types';
 import { persist } from 'zustand/middleware';
 import { useNotificationStore } from './notificationStore';
+import { generateSampleTasks } from '../utils/sampleData';
+
+type NewTaskData = Omit<Task, 'id' | 'createdAt' | 'lastModified' | 'subtasks' | 'archived' | 'comments' | 'activityLog' | 'createdBy' | 'watchers'> & {
+  initialComment?: string;
+};
+
+type NewActivityEntry = Omit<ActivityEntry, 'id' | 'timestamp'>;
 
 interface TaskState {
   tasks: Task[];
   filters: TaskFilter;
   theme: ThemeConfig;
+  activeSection: AppSection;
+  viewingTaskId: string | null;
+  editOnOpen: boolean;
   history: {
     past: Task[][];
     future: Task[][];
   };
-  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => void;
-  updateTask: (id: string, updates: Partial<Task>) => void;
+  addTask: (task: NewTaskData) => string;
+  updateTask: (id: string, updates: Partial<Task>, activityEntries?: NewActivityEntry[]) => void;
   deleteTask: (id: string) => void;
   archiveTask: (id: string) => void;
   restoreTask: (id: string) => void;
+  addComment: (taskId: string, content: string) => void;
   updateFilters: (filters: Partial<TaskFilter>) => void;
+  setActiveSection: (section: AppSection) => void;
+  setViewingTaskId: (id: string | null) => void;
+  setEditOnOpen: (value: boolean) => void;
+  runAITask: (id: string) => void;
+  loadSampleData: () => void;
   undo: () => void;
   redo: () => void;
+}
+
+function makeActivityEntry(entry: NewActivityEntry): ActivityEntry {
+  return { ...entry, id: crypto.randomUUID(), timestamp: new Date().toISOString() };
 }
 
 export const useTaskStore = create<TaskState>()(
@@ -30,24 +50,45 @@ export const useTaskStore = create<TaskState>()(
         priority: 'all',
         category: 'all',
         sortBy: 'dueDate',
-        viewMode: 'list',
         showArchived: false,
       },
       theme: {
         accentColor: '#3B82F6',
       },
+      activeSection: 'repository',
+      viewingTaskId: null,
+      editOnOpen: false,
       history: {
         past: [],
         future: [],
       },
       addTask: (taskData) => {
+        const { initialComment, ...rest } = taskData;
+        const now = new Date().toISOString();
+        const id = crypto.randomUUID();
+
+        const comments: Comment[] = initialComment?.trim()
+          ? [{
+              id: crypto.randomUUID(),
+              taskId: id,
+              userId: 'you',
+              content: initialComment.trim(),
+              createdAt: now,
+              mentions: [],
+            }]
+          : [];
+
         const task: Task = {
-          ...taskData,
-          id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
+          ...rest,
+          id,
+          createdAt: now,
+          lastModified: now,
           subtasks: [],
-          dependencies: [],
           archived: false,
+          comments,
+          createdBy: 'You',
+          watchers: [],
+          activityLog: [makeActivityEntry({ type: 'created', message: 'Task created', user: 'You' })],
         };
         set((state) => {
           const newTasks = [...state.tasks, task];
@@ -66,13 +107,21 @@ export const useTaskStore = create<TaskState>()(
             },
           };
         });
+        return id;
       },
-      updateTask: (id, updates) => {
+      updateTask: (id, updates, activityEntries) => {
         set((state) => {
           const existing = state.tasks.find((t) => t.id === id);
-          const newTasks = state.tasks.map((task) =>
-            task.id === id ? { ...task, ...updates } : task
-          );
+          const newTasks = state.tasks.map((task) => {
+            if (task.id !== id) return task;
+            const entries = (activityEntries ?? []).map(makeActivityEntry);
+            return {
+              ...task,
+              ...updates,
+              lastModified: new Date().toISOString(),
+              activityLog: entries.length > 0 ? [...task.activityLog, ...entries] : task.activityLog,
+            };
+          });
 
           if (existing && updates.status && updates.status !== existing.status) {
             const { addNotification } = useNotificationStore.getState();
@@ -102,6 +151,35 @@ export const useTaskStore = create<TaskState>()(
           };
         });
       },
+      addComment: (taskId, content) => {
+        const trimmed = content.trim();
+        if (!trimmed) return;
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  comments: [
+                    ...task.comments,
+                    {
+                      id: crypto.randomUUID(),
+                      taskId,
+                      userId: 'You',
+                      content: trimmed,
+                      createdAt: new Date().toISOString(),
+                      mentions: [],
+                    },
+                  ],
+                  activityLog: [
+                    ...task.activityLog,
+                    makeActivityEntry({ type: 'comment_added', message: 'Added a comment', user: 'You' }),
+                  ],
+                  lastModified: new Date().toISOString(),
+                }
+              : task
+          ),
+        }));
+      },
       deleteTask: (id) => {
         set((state) => {
           const newTasks = state.tasks.filter((task) => task.id !== id);
@@ -117,7 +195,7 @@ export const useTaskStore = create<TaskState>()(
       archiveTask: (id) => {
         set((state) => {
           const newTasks = state.tasks.map((task) =>
-            task.id === id ? { ...task, archived: true } : task
+            task.id === id ? { ...task, archived: true, lastModified: new Date().toISOString() } : task
           );
           return {
             tasks: newTasks,
@@ -131,7 +209,7 @@ export const useTaskStore = create<TaskState>()(
       restoreTask: (id) => {
         set((state) => {
           const newTasks = state.tasks.map((task) =>
-            task.id === id ? { ...task, archived: false } : task
+            task.id === id ? { ...task, archived: false, lastModified: new Date().toISOString() } : task
           );
           return {
             tasks: newTasks,
@@ -146,6 +224,119 @@ export const useTaskStore = create<TaskState>()(
         set((state) => ({
           filters: { ...state.filters, ...newFilters },
         }));
+      },
+      setActiveSection: (section) => {
+        set({ activeSection: section });
+      },
+      setViewingTaskId: (id) => {
+        set({ viewingTaskId: id });
+      },
+      setEditOnOpen: (value) => {
+        set({ editOnOpen: value });
+      },
+      runAITask: (id) => {
+        const startedAt = new Date().toISOString();
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === id && t.aiMeta
+              ? {
+                  ...t,
+                  aiMeta: {
+                    ...t.aiMeta,
+                    executionStatus: 'running',
+                    result: '',
+                    startedAt,
+                    completedAt: undefined,
+                    logs: [...t.aiMeta.logs, `[${new Date().toLocaleTimeString()}] Execution started…`],
+                  },
+                  activityLog: [
+                    ...t.activityLog,
+                    makeActivityEntry({ type: 'ai_execution_started', message: 'AI execution started', user: 'You' }),
+                  ],
+                  lastModified: new Date().toISOString(),
+                }
+              : t
+          ),
+        }));
+
+        setTimeout(() => {
+          set((state) => {
+            const task = state.tasks.find((t) => t.id === id);
+            if (!task?.aiMeta) return state;
+
+            const threshold = task.aiMeta.confidenceThreshold ?? 70;
+            const confidence = Math.round(40 + Math.random() * 60);
+            const success = confidence >= threshold;
+            const time = new Date().toLocaleTimeString();
+
+            const logs = [
+              ...task.aiMeta.logs,
+              `[${time}] Model "${task.aiMeta.model || 'default'}" processing prompt…`,
+              `[${time}] Confidence score: ${confidence}%`,
+              success
+                ? `[${time}] Execution completed successfully.`
+                : `[${time}] Execution failed — confidence below threshold (${threshold}%).`,
+            ];
+            const result = success
+              ? `Simulated ${task.aiMeta.outputType || 'text'} output for: "${task.aiMeta.prompt.slice(0, 80)}${task.aiMeta.prompt.length > 80 ? '…' : ''}"`
+              : '';
+
+            const { addNotification } = useNotificationStore.getState();
+            addNotification({
+              type: success ? 'completed' : 'status_changed',
+              taskId: task.id,
+              taskTitle: task.title,
+              message: success
+                ? `AI task "${task.title}" executed successfully`
+                : `AI task "${task.title}" execution failed`,
+            });
+
+            return {
+              tasks: state.tasks.map((t) =>
+                t.id === id && t.aiMeta
+                  ? {
+                      ...t,
+                      aiMeta: {
+                        ...t.aiMeta,
+                        executionStatus: success ? 'success' : 'failed',
+                        result,
+                        logs,
+                        completedAt: new Date().toISOString(),
+                      },
+                      activityLog: [
+                        ...t.activityLog,
+                        makeActivityEntry({
+                          type: 'ai_execution_completed',
+                          message: success ? 'AI execution completed successfully' : 'AI execution failed',
+                          user: 'You',
+                        }),
+                      ],
+                      lastModified: new Date().toISOString(),
+                    }
+                  : t
+              ),
+            };
+          });
+        }, 1500);
+      },
+      loadSampleData: () => {
+        set((state) => {
+          const sampleTasks = generateSampleTasks();
+          const { addNotification } = useNotificationStore.getState();
+          addNotification({
+            type: 'task_added',
+            taskId: sampleTasks[0]?.id ?? '',
+            taskTitle: 'Sample data',
+            message: `Loaded ${sampleTasks.length} sample tasks across all 5 categories`,
+          });
+          return {
+            tasks: [...state.tasks, ...sampleTasks],
+            history: {
+              past: [...state.history.past, state.tasks],
+              future: [],
+            },
+          };
+        });
       },
       undo: () => {
         set((state) => {
@@ -180,6 +371,34 @@ export const useTaskStore = create<TaskState>()(
     }),
     {
       name: 'task-storage',
+      version: 3,
+      migrate: (persistedState) => {
+        const state = persistedState as TaskState;
+        if (state?.tasks) {
+          state.tasks = state.tasks.map((task) => ({
+            ...task,
+            lastModified: task.lastModified ?? task.createdAt,
+            taskType: task.taskType ?? 'general',
+            createdBy: task.createdBy ?? 'You',
+            watchers: task.watchers ?? [],
+            activityLog: task.activityLog ?? [
+              makeActivityEntry({ type: 'created', message: 'Task created', user: task.createdBy ?? 'You' }),
+            ],
+            attachments: (task.attachments ?? []).map((att) => ({
+              ...att,
+              uploadedBy: att.uploadedBy ?? 'You',
+              uploadedAt: att.uploadedAt ?? task.createdAt,
+            })),
+          }));
+        }
+        if (!state?.viewingTaskId) {
+          state.viewingTaskId = null;
+        }
+        if (!state?.activeSection) {
+          state.activeSection = 'repository';
+        }
+        return state;
+      },
     }
   )
 );

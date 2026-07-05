@@ -9,6 +9,8 @@ import {
   Plus,
   X,
   CheckCheck,
+  ShieldAlert,
+  FileWarning,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useNotificationStore } from '../store/notificationStore';
@@ -47,6 +49,26 @@ const TYPE_CONFIG: Record<
     icon: <Plus className="w-3.5 h-3.5 text-jade" />,
     border: 'border-l-jade',
     label: 'Task Added',
+  },
+  sla_due_soon: {
+    icon: <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />,
+    border: 'border-l-amber-400',
+    label: 'SLA Due Soon',
+  },
+  sla_breached: {
+    icon: <ShieldAlert className="w-3.5 h-3.5 text-red-400" />,
+    border: 'border-l-red-500',
+    label: 'SLA Breached',
+  },
+  contract_expiring: {
+    icon: <FileWarning className="w-3.5 h-3.5 text-amber-400" />,
+    border: 'border-l-amber-400',
+    label: 'Contract Expiring',
+  },
+  contract_expired: {
+    icon: <FileWarning className="w-3.5 h-3.5 text-red-400" />,
+    border: 'border-l-red-500',
+    label: 'Contract Expired',
   },
 };
 
