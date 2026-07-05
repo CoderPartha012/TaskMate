@@ -124,25 +124,6 @@ export interface ReportAuditEntry {
   type: ReportAuditType;
 }
 
-export type ReportRole = 'Administrator' | 'Manager' | 'Team Lead' | 'Employee';
-
-export const REPORT_ROLES: ReportRole[] = ['Administrator', 'Manager', 'Team Lead', 'Employee'];
-
-export interface RolePermissions {
-  view: boolean;
-  generate: boolean;
-  export: boolean;
-  delete: boolean;
-  schedule: boolean;
-}
-
-export const ROLE_PERMISSIONS: Record<ReportRole, RolePermissions> = {
-  Administrator: { view: true, generate: true, export: true, delete: true, schedule: true },
-  Manager:       { view: true, generate: true, export: true, delete: true, schedule: true },
-  'Team Lead':   { view: true, generate: true, export: true, delete: false, schedule: false },
-  Employee:      { view: true, generate: false, export: false, delete: false, schedule: false },
-};
-
 export const REPORT_CATEGORIES: Record<string, string[]> = {
   'Task Reports': ['Task Summary Report', 'Task Details Report', 'Task Status Report', 'Task Priority Report', 'Task Category Report', 'Task Completion Report', 'Overdue Task Report'],
   'User Reports': ['Assignee Workload Report', 'Team Productivity Report', 'User Activity Report', 'Created By Report'],

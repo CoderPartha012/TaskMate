@@ -5,8 +5,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['Syne', 'sans-serif'],
-        sans: ['Manrope', 'sans-serif'],
+        display: ['Inter', 'sans-serif'],
+        sans: ['Inter', 'sans-serif'],
       },
       colors: {
         noir: {

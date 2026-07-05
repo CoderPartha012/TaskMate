@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
-  ReportConfig, ReportHistoryEntry, ScheduledReport, ReportAuditEntry, ReportAuditType, ReportRole,
+  ReportConfig, ReportHistoryEntry, ScheduledReport, ReportAuditEntry, ReportAuditType,
 } from '../types/report.types';
 import { computeNextRun } from '../utils/reportBuilder';
 
@@ -10,7 +10,6 @@ interface ReportsState {
   history: ReportHistoryEntry[];
   scheduled: ScheduledReport[];
   auditLog: ReportAuditEntry[];
-  currentRole: ReportRole;
 
   saveReport: (config: ReportConfig) => void;
   updateReport: (id: string, updates: Partial<ReportConfig>) => void;
@@ -27,7 +26,6 @@ interface ReportsState {
   runDueSchedules: () => void;
 
   addAuditEntry: (user: string, activity: string, type: ReportAuditType) => void;
-  setCurrentRole: (role: ReportRole) => void;
 }
 
 export const useReportsStore = create<ReportsState>()(
@@ -37,7 +35,6 @@ export const useReportsStore = create<ReportsState>()(
       history: [],
       scheduled: [],
       auditLog: [],
-      currentRole: 'Administrator',
 
       saveReport: (config) => {
         set((state) => ({ savedReports: [config, ...state.savedReports] }));
@@ -121,7 +118,6 @@ export const useReportsStore = create<ReportsState>()(
           auditLog: [{ id: crypto.randomUUID(), user, timestamp: new Date().toISOString(), activity, type }, ...state.auditLog].slice(0, 300),
         }));
       },
-      setCurrentRole: (role) => set({ currentRole: role }),
     }),
     { name: 'reports-storage' }
   )

@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Filter, Plus } from 'lucide-react';
 import { useTaskStore } from '../store/taskStore';
 import { useReportsStore } from '../store/reportsStore';
+import { useRolesStore } from '../store/rolesStore';
 import {
   ReportConfig, ReportFilters, EMPTY_REPORT_FILTERS, createEmptyReportConfig,
-  ReportHistoryEntry, REPORT_COLUMNS, ROLE_PERMISSIONS, ScheduleFrequency,
+  ReportHistoryEntry, REPORT_COLUMNS, ScheduleFrequency,
 } from '../types/report.types';
 import { buildReport, getReportPreset, exportReportCSV, exportReportExcel, exportReportPDF } from '../utils/reportBuilder';
 import { ReportsKPICards } from './ReportsKPICards';
@@ -36,12 +37,13 @@ const TABS: { key: Tab; label: string }[] = [
 export function ReportsPage() {
   const tasks = useTaskStore((s) => s.tasks.filter((t) => !t.archived));
   const {
-    savedReports, history, scheduled, auditLog, currentRole,
+    savedReports, history, scheduled, auditLog,
     saveReport, deleteReport, duplicateReport, toggleFavorite,
     addHistoryEntry, deleteHistoryEntry,
     addScheduledReport, updateScheduledReport, deleteScheduledReport, runDueSchedules,
-    addAuditEntry, setCurrentRole,
+    addAuditEntry,
   } = useReportsStore();
+  const { roles, currentRoleId, setCurrentRoleId } = useRolesStore();
 
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [config, setConfig] = useState<ReportConfig | null>(null);
@@ -51,7 +53,13 @@ export function ReportsPage() {
   const [emailOpen, setEmailOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
 
-  const perms = ROLE_PERMISSIONS[currentRole];
+  const activeRole = roles.find((r) => r.id === currentRoleId) ?? roles[0];
+  const perms = {
+    generate: activeRole.permissions['reports.generate'],
+    export: activeRole.permissions['reports.export'],
+    delete: activeRole.permissions['reports.delete'],
+    schedule: activeRole.permissions['reports.schedule'],
+  };
 
   // Simulated scheduler: check every 60s while the tab is open
   useEffect(() => {
@@ -192,7 +200,7 @@ export function ReportsPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <ReportRoleSelector role={currentRole} onChange={setCurrentRole} />
+          <ReportRoleSelector roles={roles} currentRoleId={currentRoleId} onChange={setCurrentRoleId} />
           <button
             type="button"
             onClick={() => setGlobalFilterOpen(true)}

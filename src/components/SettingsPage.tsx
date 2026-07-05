@@ -4,6 +4,7 @@ import {
   FileSignature, Bell, Palette, Table2, BarChart2, FileDown, Plug, Lock, DatabaseBackup,
   Mail, Settings2, ScrollText, LifeBuoy, Construction,
 } from 'lucide-react';
+import { RolesPermissionsPage } from './RolesPermissionsPage';
 
 interface SettingsFeature {
   key: string;
@@ -35,6 +36,10 @@ const SETTINGS_FEATURES: SettingsFeature[] = [
   { key: 'audit-logs', label: 'Audit Logs', icon: <ScrollText className="w-5 h-5" />, overview: 'Review a complete history of system and user activity.' },
   { key: 'help-support', label: 'Help & Support', icon: <LifeBuoy className="w-5 h-5" />, overview: 'Access documentation, guides, and support resources.' },
 ];
+
+const IMPLEMENTED_FEATURES: Record<string, React.ComponentType> = {
+  'roles-permissions': RolesPermissionsPage,
+};
 
 export function SettingsPage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -81,10 +86,16 @@ export function SettingsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5 mt-6">
-            <Construction className="w-3.5 h-3.5 shrink-0" />
-            This settings page hasn't been built yet — let me know when you'd like to configure it.
-          </div>
+          {IMPLEMENTED_FEATURES[selected.key] ? (
+            <div className="pt-2 border-t border-white/[0.06] mt-2">
+              {React.createElement(IMPLEMENTED_FEATURES[selected.key])}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-[11px] text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5 mt-6">
+              <Construction className="w-3.5 h-3.5 shrink-0" />
+              This settings page hasn't been built yet — let me know when you'd like to configure it.
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-noir-700 border border-white/[0.06] rounded-xl p-10 text-center text-white/30 text-sm">

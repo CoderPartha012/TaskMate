@@ -17,12 +17,12 @@
 body {
   background-color: var(--bg-page);
   color: var(--text-primary);
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 700;
   letter-spacing: -0.3px;
 }
