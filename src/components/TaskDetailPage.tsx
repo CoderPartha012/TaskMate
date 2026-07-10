@@ -1,17 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { ArrowLeft, Pencil, UserPlus, CheckCircle2, Trash2, Save, X, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Pencil, UserPlus, CheckCircle2, Trash2, Save, X, AlertTriangle, Copy } from 'lucide-react';
 import { useTaskStore } from '../store/taskStore';
-import { ActivityType } from '../types';
-import { TASK_TYPE_LABELS, TASK_TYPE_SHORT } from './TaskTypeSelector';
+import { ActivityType, Status } from '../types';
+import { TASK_TYPE_SHORT } from './TaskTypeSelector';
 import { TaskGeneralInfo } from './TaskGeneralInfo';
 import { TaskCategoryMetaSection } from './TaskCategoryMetaSection';
 import { TaskAttachmentsSection } from './TaskAttachmentsSection';
 import { TaskCommentsSection } from './TaskCommentsSection';
 import { TaskActivityTimeline } from './TaskActivityTimeline';
 import { TaskQuickSummarySidebar } from './TaskQuickSummarySidebar';
+import { TaskSubtasksSection } from './TaskSubtasksSection';
+import { TaskTimeTracker } from './TaskTimeTracker';
 import { GeneralDraft } from './taskDetailTypes';
 import { buildMetaDraft, buildMetaUpdate } from '../utils/metaDraft';
+
+const statusBadgeStyles: Record<Status, string> = {
+  completed: 'bg-jade/15 text-jade',
+  'in-progress': 'bg-blue-500/15 text-blue-400',
+  pending: 'bg-white/5 text-white/40',
+};
 
 const inputBase =
   'rounded-lg bg-noir-600 text-white/80 text-sm px-3 py-2 focus:outline-none border border-white/[0.08] focus:border-jade transition-colors w-full';
@@ -30,6 +38,7 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
   const tasks = useTaskStore((s) => s.tasks);
   const updateTask = useTaskStore((s) => s.updateTask);
   const deleteTask = useTaskStore((s) => s.deleteTask);
+  const duplicateTask = useTaskStore((s) => s.duplicateTask);
   const setActiveSection = useTaskStore((s) => s.setActiveSection);
   const setViewingTaskId = useTaskStore((s) => s.setViewingTaskId);
   const editOnOpen = useTaskStore((s) => s.editOnOpen);
@@ -124,7 +133,11 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
       entries.push({ type: 'metadata_updated', message: `Title changed to "${titleDraft.trim()}"`, user: 'You' });
     }
     if (generalDraft.status !== task.status) {
-      entries.push({ type: 'status_changed', message: `Status changed to ${generalDraft.status.replace('-', ' ')}`, user: 'You' });
+      entries.push({
+        type: 'status_changed',
+        message: `Status changed from ${task.status.replace('-', ' ')} to ${generalDraft.status.replace('-', ' ')}`,
+        user: 'You',
+      });
     }
     const newAssigneeText = newAssignees.join(', ');
     if (newAssigneeText !== task.assignees.join(', ')) {
@@ -202,6 +215,26 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
     goBack();
   };
 
+  const handleStatusChange = (newStatus: Status) => {
+    if (newStatus === task.status) return;
+    updateTask(
+      task.id,
+      { status: newStatus, completedAt: newStatus === 'completed' ? new Date().toISOString() : task.completedAt },
+      [{
+        type: 'status_changed',
+        message: `Status changed from ${task.status.replace('-', ' ')} to ${newStatus.replace('-', ' ')}`,
+        user: 'You',
+      }]
+    );
+  };
+
+  const handleDuplicate = () => {
+    const newId = duplicateTask(task.id);
+    if (!newId) return;
+    setViewingTaskId(newId);
+    setActiveSection('task-detail');
+  };
+
   return (
     <div>
       {/* Header */}
@@ -222,13 +255,16 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/[0.06] text-white/40 uppercase tracking-wide">
                 {TASK_TYPE_SHORT[task.taskType]}
               </span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${
-                task.status === 'completed' ? 'bg-jade/15 text-jade'
-                  : task.status === 'in-progress' ? 'bg-blue-500/15 text-blue-400'
-                  : 'bg-white/5 text-white/40'
-              }`}>
-                {task.status.replace('-', ' ')}
-              </span>
+              <select
+                aria-label="Task status"
+                value={task.status}
+                onChange={(e) => handleStatusChange(e.target.value as Status)}
+                className={`text-[10px] font-bold pl-2 pr-1.5 py-0.5 rounded-full uppercase tracking-wide border-none focus:outline-none focus:ring-1 focus:ring-jade/50 cursor-pointer ${statusBadgeStyles[task.status]}`}
+              >
+                <option value="pending" className="bg-noir-700 text-white normal-case">Pending</option>
+                <option value="in-progress" className="bg-noir-700 text-white normal-case">In Progress</option>
+                <option value="completed" className="bg-noir-700 text-white normal-case">Completed</option>
+              </select>
             </div>
 
             {editing ? (
@@ -279,6 +315,14 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
                 </button>
                 <button
                   type="button"
+                  onClick={handleDuplicate}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-white/[0.08] text-white/60 hover:text-white hover:border-white/[0.2] transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Duplicate Task
+                </button>
+                <button
+                  type="button"
                   onClick={() => setConfirmingDelete(true)}
                   className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors"
                 >
@@ -320,6 +364,8 @@ export function TaskDetailPage({ taskId }: TaskDetailPageProps) {
             }}
             onChange={handleGeneralChange}
           />
+          <TaskTimeTracker task={task} />
+          <TaskSubtasksSection task={task} />
           <TaskCategoryMetaSection
             task={task}
             editing={editing}

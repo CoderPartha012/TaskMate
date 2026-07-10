@@ -1,8 +1,16 @@
-import React, { useState } from 'react';
-import { ArrowLeft, CalendarIcon, CheckCircleIcon, Clock } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { formatDistanceToNow } from 'date-fns';
+import { CalendarIcon, ChevronRight, CheckCircleIcon, Clock, AlertTriangle } from 'lucide-react';
 import { Priority, Category, RecurrencePattern, Status, TaskType, TaskAttachment } from '../types';
 import { useTaskStore } from '../store/taskStore';
+import { useDraftStore } from '../store/draftStore';
+import { useToastStore } from '../store/toastStore';
+import { TaskDraft } from '../types/draft.types';
+import { DraftFormData, hasMeaningfulData, computeCompletionPercent, convertDraftCategory } from '../utils/draftFormData';
 import { TaskCategoryOverview, TASK_TYPE_LABELS } from './TaskTypeSelector';
+import { TaskCategoryTabs } from './TaskCategoryTabs';
+import { DraftsSection } from './DraftsSection';
 import { MetaFieldGroup } from './MetaFieldGroup';
 import { AttachmentsField } from './AttachmentsField';
 import {
@@ -12,6 +20,8 @@ import {
   AI_OUTPUT_FIELDS,
   CONTRACT_FIELDS,
 } from './metaFieldConfigs';
+
+const MAX_DRAFTS = 10;
 
 type Errors = {
   title: string;
@@ -56,6 +66,18 @@ function generateContractId(): string {
   return `CTR-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
 
+function getDueDateAdvisory(dateStr: string): string | null {
+  if (!dateStr) return null;
+  const due = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (due < today) return 'This due date is in the past.';
+  const day = due.getDay();
+  if (day === 0 || day === 6) return 'Heads up — this falls on a weekend.';
+  return null;
+}
+
 export function TaskForm() {
   const addTask = useTaskStore((state) => state.addTask);
   const setActiveSection = useTaskStore((state) => state.setActiveSection);
@@ -87,6 +109,121 @@ export function TaskForm() {
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState<Errors>({ title: '', dueDate: '', priority: '', category: '', prompt: '' });
 
+  const [pendingSwitch, setPendingSwitch] = useState<TaskType | null>(null);
+
+  // Drafts
+  const drafts = useDraftStore((s) => s.drafts);
+  const saveDraftAction = useDraftStore((s) => s.saveDraft);
+  const deleteDraftAction = useDraftStore((s) => s.deleteDraft);
+
+  const [currentDraft, setCurrentDraft] = useState<{ id: string; createdAt: string } | null>(null);
+  const [resumingDraft, setResumingDraft] = useState<{ lastModified: string; hadAttachments: boolean } | null>(null);
+  const [existingDraftPrompt, setExistingDraftPrompt] = useState<TaskDraft | null>(null);
+
+  const buildSnapshot = (): DraftFormData => ({
+    title, description, dueDate, priority, category, status, assignee,
+    recurrence, estimatedTime, startDate, tags,
+    attachments: attachments.map((a) => ({ name: a.name, type: a.type, size: a.size })),
+    initialComment, meta,
+  });
+
+  const taskTypeRef = useRef(taskType);
+  const currentDraftRef = useRef(currentDraft);
+  const draftsRef = useRef(drafts);
+  const snapshotRef = useRef<DraftFormData>(buildSnapshot());
+
+  useEffect(() => {
+    taskTypeRef.current = taskType;
+    currentDraftRef.current = currentDraft;
+    draftsRef.current = drafts;
+    snapshotRef.current = buildSnapshot();
+  });
+
+  const trySaveDraft = (source: 'interval' | 'unmount' | 'switch' | 'changeCategory'): string | null => {
+    const type = taskTypeRef.current;
+    const snapshot = snapshotRef.current;
+    const existingDraft = currentDraftRef.current;
+
+    if (!type) return null;
+    if (!hasMeaningfulData(snapshot)) return null;
+    if (!existingDraft && draftsRef.current.length >= MAX_DRAFTS) return null;
+
+    const now = new Date().toISOString();
+    const id = existingDraft?.id ?? `draft-${Date.now()}`;
+    const createdAt = existingDraft?.createdAt ?? now;
+
+    saveDraftAction({
+      id,
+      category: type,
+      formData: snapshot,
+      createdAt,
+      lastModified: now,
+      completionPercent: computeCompletionPercent(type, snapshot),
+    });
+
+    if (!existingDraft) {
+      currentDraftRef.current = { id, createdAt };
+      if (source !== 'unmount') setCurrentDraft({ id, createdAt });
+    }
+
+    useToastStore.getState().showToast({
+      message: source === 'unmount' ? 'Draft saved automatically' : 'Draft saved',
+    });
+
+    return id;
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => trySaveDraft('interval'), 30000);
+    return () => {
+      clearInterval(interval);
+      trySaveDraft('unmount');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleResumeDraft = (draft: TaskDraft) => {
+    const data = draft.formData as DraftFormData;
+    setTaskType(draft.category);
+    setTitle(data.title);
+    setDescription(data.description);
+    setDueDate(data.dueDate);
+    setPriority(data.priority);
+    setCategory(data.category);
+    setStatus(data.status);
+    setAssignee(data.assignee);
+    setRecurrence(data.recurrence);
+    setEstimatedTime(data.estimatedTime);
+    setStartDate(data.startDate);
+    setTags(data.tags);
+    setAttachments([]);
+    setInitialComment(data.initialComment);
+    setMeta(data.meta);
+    setSubmitted(false);
+    setErrors({ title: '', dueDate: '', priority: '', category: '', prompt: '' });
+
+    setCurrentDraft({ id: draft.id, createdAt: draft.createdAt });
+    currentDraftRef.current = { id: draft.id, createdAt: draft.createdAt };
+    setResumingDraft({ lastModified: draft.lastModified, hadAttachments: data.attachments.length > 0 });
+    setExistingDraftPrompt(null);
+    setPendingSwitch(null);
+  };
+
+  const handleDeleteDraftFromList = (draft: TaskDraft) => {
+    deleteDraftAction(draft.id);
+    useToastStore.getState().showToast({
+      message: 'Draft deleted',
+      duration: 5000,
+      actionLabel: 'Undo',
+      onAction: () => saveDraftAction(draft),
+    });
+  };
+
+  const handleConvertDraft = (draft: TaskDraft, newCategory: TaskType) => {
+    saveDraftAction(convertDraftCategory(draft, newCategory));
+    useToastStore.getState().showToast({ message: 'Draft saved' });
+  };
+
   if (taskType === null) {
     return (
       <div className="bg-noir-700 border border-white/[0.06] rounded-xl p-6 mb-6">
@@ -94,7 +231,16 @@ export function TaskForm() {
           <CheckCircleIcon className="w-4 h-4 text-jade" aria-hidden="true" />
           Add New Task
         </h2>
+        {drafts.length >= MAX_DRAFTS && (
+          <div className="flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-2.5 mb-5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+            <p className="text-[11px] text-amber-300/90 leading-relaxed">
+              You've reached the maximum of 10 drafts. Please complete or delete a draft before starting a new task.
+            </p>
+          </div>
+        )}
         <TaskCategoryOverview onSelect={setTaskType} />
+        <DraftsSection onResume={handleResumeDraft} onDelete={handleDeleteDraftFromList} onConvert={handleConvertDraft} />
       </div>
     );
   }
@@ -115,11 +261,53 @@ export function TaskForm() {
     setMeta({});
     setSubmitted(false);
     setErrors({ title: '', dueDate: '', priority: '', category: '', prompt: '' });
+    setCurrentDraft(null);
+    currentDraftRef.current = null;
+    setResumingDraft(null);
+    setExistingDraftPrompt(null);
   };
 
   const handleChangeCategory = () => {
+    trySaveDraft('changeCategory');
     resetForm();
     setTaskType(null);
+  };
+
+  const handleDiscardDraft = () => {
+    if (currentDraft) deleteDraftAction(currentDraft.id);
+    resetForm();
+    setTaskType(null);
+  };
+
+  const hasCategorySpecificData = () => {
+    const metaFilled = Object.values(meta).some((v) => v.trim() !== '');
+    if (taskType === 'general') {
+      return metaFilled || !!startDate || !!tags.trim() || attachments.length > 0 || !!initialComment.trim();
+    }
+    return metaFilled;
+  };
+
+  const commitSwitch = (newType: TaskType) => {
+    trySaveDraft('switch');
+    setMeta({});
+    setStartDate(''); setTags(''); setAttachments([]); setInitialComment('');
+    setTaskType(newType);
+    setPendingSwitch(null);
+    setSubmitted(false);
+    setErrors({ title: '', dueDate: '', priority: '', category: '', prompt: '' });
+    setCurrentDraft(null);
+    currentDraftRef.current = null;
+    setResumingDraft(null);
+    setExistingDraftPrompt(drafts.find((d) => d.category === newType) ?? null);
+  };
+
+  const handleSwitchCategory = (newType: TaskType) => {
+    if (newType === taskType) return;
+    if (hasCategorySpecificData()) {
+      setPendingSwitch(newType);
+    } else {
+      commitSwitch(newType);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -204,6 +392,7 @@ export function TaskForm() {
       } : undefined,
     });
 
+    if (currentDraft) deleteDraftAction(currentDraft.id);
     resetForm();
     setViewingTaskId(newTaskId);
     setActiveSection('task-detail');
@@ -213,19 +402,86 @@ export function TaskForm() {
 
   return (
     <form onSubmit={handleSubmit} className="bg-noir-700 border border-white/[0.06] rounded-xl p-6 mb-6" noValidate>
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="font-display font-bold text-base text-white flex items-center gap-2">
-          <CheckCircleIcon className="w-4 h-4 text-jade" aria-hidden="true" />
-          Add New Task — {TASK_TYPE_LABELS[taskType]}
-        </h2>
-        <button
-          type="button"
-          onClick={handleChangeCategory}
-          className="flex items-center gap-1 text-[11px] font-semibold text-white/35 hover:text-jade transition-colors shrink-0 whitespace-nowrap"
-        >
-          <ArrowLeft className="w-3 h-3" aria-hidden="true" />
-          Change category
-        </button>
+      <div className="mb-5">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-white/35 mb-3">
+          <button
+            type="button"
+            onClick={handleChangeCategory}
+            className="flex items-center gap-1 hover:text-jade transition-colors"
+          >
+            <CheckCircleIcon className="w-3.5 h-3.5 text-jade" aria-hidden="true" />
+            Add New Task
+          </button>
+          <ChevronRight className="w-3 h-3" aria-hidden="true" />
+          <span className="text-white/60">{TASK_TYPE_LABELS[taskType]}</span>
+        </div>
+
+        <TaskCategoryTabs active={taskType} onSelect={handleSwitchCategory} />
+
+        {pendingSwitch && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-2.5 mt-1">
+            <p className="text-[11px] text-amber-300/90 leading-relaxed flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              Switching will clear {TASK_TYPE_LABELS[taskType]}-specific fields. Common fields will be kept.
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setPendingSwitch(null)}
+                className="text-[11px] font-semibold text-white/45 hover:text-white/70 transition-colors px-2 py-1"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => commitSwitch(pendingSwitch)}
+                className="text-[11px] font-bold text-noir-800 bg-amber-400 hover:bg-amber-300 rounded-md px-2.5 py-1 transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {resumingDraft && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-500/25 bg-blue-500/[0.08] px-4 py-2.5 mt-1">
+            <p className="text-[11px] text-blue-300/90 leading-relaxed">
+              📝 Resuming draft from {formatDistanceToNow(new Date(resumingDraft.lastModified), { addSuffix: true })}
+              {resumingDraft.hadAttachments && ' — attachments were not saved with this draft. Please re-upload them.'}
+            </p>
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              className="text-[11px] font-semibold text-blue-300/80 hover:text-blue-200 transition-colors shrink-0 whitespace-nowrap"
+            >
+              Discard draft
+            </button>
+          </div>
+        )}
+
+        {existingDraftPrompt && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-500/25 bg-blue-500/[0.08] px-4 py-2.5 mt-1">
+            <p className="text-[11px] text-blue-300/90 leading-relaxed">
+              You have an existing draft for {TASK_TYPE_LABELS[existingDraftPrompt.category]}. Resume it or start fresh?
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setExistingDraftPrompt(null)}
+                className="text-[11px] font-semibold text-white/45 hover:text-white/70 transition-colors px-2 py-1"
+              >
+                Start Fresh
+              </button>
+              <button
+                type="button"
+                onClick={() => handleResumeDraft(existingDraftPrompt)}
+                className="text-[11px] font-bold text-noir-800 bg-blue-400 hover:bg-blue-300 rounded-md px-2.5 py-1 transition-colors"
+              >
+                Resume Draft
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -248,6 +504,16 @@ export function TaskForm() {
             <p id="err-title" role="alert" className="mt-1 text-[10px] text-red-400">{errors.title}</p>
           )}
         </div>
+
+        <AnimatePresence mode="wait">
+        <motion.div
+          key={taskType}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.15 }}
+          className="space-y-4"
+        >
 
         {taskType === 'general' && (
           <div>
@@ -284,6 +550,12 @@ export function TaskForm() {
                 </div>
                 {err('dueDate') && (
                   <p id="err-due" role="alert" className="mt-1 text-[10px] text-red-400">{errors.dueDate}</p>
+                )}
+                {!err('dueDate') && getDueDateAdvisory(dueDate) && (
+                  <p className="mt-1 text-[10px] text-amber-400/80 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    {getDueDateAdvisory(dueDate)}
+                  </p>
                 )}
               </div>
             )}
@@ -475,6 +747,9 @@ export function TaskForm() {
         {taskType === 'contract' && (
           <MetaFieldGroup fields={CONTRACT_FIELDS} values={meta} onChange={setMetaField} />
         )}
+
+        </motion.div>
+        </AnimatePresence>
 
         <div className="pt-1">
           <p className="text-[10px] text-white/25 mb-3">

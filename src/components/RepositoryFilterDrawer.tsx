@@ -1,11 +1,43 @@
-import React from 'react';
-import { X, Filter } from 'lucide-react';
+import React, { useState } from 'react';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter } from 'date-fns';
+import { X, Filter, Clock, Bookmark } from 'lucide-react';
+import { Priority, Status, TaskType } from '../types';
 import { TASK_TYPE_LABELS } from './TaskTypeSelector';
+import { MultiSelectDropdown } from './MultiSelectDropdown';
+import { WORKFLOW_FIELDS, CONTRACT_FIELDS } from './metaFieldConfigs';
 import { RepositoryFilters } from './repositoryFilterTypes';
+import { useRepositoryViewStore } from '../store/repositoryViewStore';
 
 const labelClass = 'text-[10px] font-semibold uppercase tracking-widest text-white/40';
 const inputBase =
   'mt-1 block w-full rounded-lg bg-noir-600 text-white/80 text-sm px-3 py-2 focus:outline-none border border-white/[0.08] focus:border-jade transition-colors';
+
+const APPROVAL_LEVEL_OPTIONS = WORKFLOW_FIELDS.find((f) => f.key === 'approvalLevel')?.options ?? [];
+const COMPLIANCE_STATUS_OPTIONS = CONTRACT_FIELDS.find((f) => f.key === 'complianceStatus')?.options ?? [];
+const CONTRACT_TYPE_OPTIONS = CONTRACT_FIELDS.find((f) => f.key === 'contractType')?.options ?? [];
+
+const SLA_STATUS_OPTIONS: { value: RepositoryFilters['workflowSlaStatus']; label: string }[] = [
+  { value: 'breached', label: 'Breached' },
+  { value: 'due-soon', label: 'Due Soon' },
+  { value: 'ok', label: 'On Track' },
+];
+
+function ymd(d: Date): string {
+  return format(d, 'yyyy-MM-dd');
+}
+
+const DUE_DATE_QUICK_RANGES: { label: string; range: () => [string, string] }[] = [
+  { label: 'Today', range: () => { const t = ymd(new Date()); return [t, t]; } },
+  { label: 'This Week', range: () => [ymd(startOfWeek(new Date())), ymd(endOfWeek(new Date()))] },
+  { label: 'This Month', range: () => [ymd(startOfMonth(new Date())), ymd(endOfMonth(new Date()))] },
+  { label: 'This Quarter', range: () => [ymd(startOfQuarter(new Date())), ymd(endOfQuarter(new Date()))] },
+];
+
+interface FacetCounts {
+  category: Partial<Record<TaskType, number>>;
+  status: Partial<Record<Status, number>>;
+  priority: Partial<Record<Priority, number>>;
+}
 
 interface RepositoryFilterDrawerProps {
   open: boolean;
@@ -15,12 +47,34 @@ interface RepositoryFilterDrawerProps {
   onApply: () => void;
   onReset: () => void;
   onClearAll: () => void;
+  counts: FacetCounts;
 }
 
 export function RepositoryFilterDrawer({
-  open, onClose, draft, onDraftChange, onApply, onReset, onClearAll,
+  open, onClose, draft, onDraftChange, onApply, onReset, onClearAll, counts,
 }: RepositoryFilterDrawerProps) {
+  const recentFilters = useRepositoryViewStore((s) => s.recentFilters);
+  const savedFilterPresets = useRepositoryViewStore((s) => s.savedFilterPresets);
+  const saveFilterPreset = useRepositoryViewStore((s) => s.saveFilterPreset);
+  const deleteFilterPreset = useRepositoryViewStore((s) => s.deleteFilterPreset);
+
+  const [presetName, setPresetName] = useState('');
+
   if (!open) return null;
+
+  const showWorkflowFields = draft.taskCategory.length === 1 && draft.taskCategory[0] === 'workflow';
+  const showContractFields = draft.taskCategory.length === 1 && draft.taskCategory[0] === 'contract';
+
+  const applyDueQuickRange = (range: () => [string, string]) => {
+    const [from, to] = range();
+    onDraftChange({ dueFrom: from, dueTo: to });
+  };
+
+  const handleSavePreset = () => {
+    if (!presetName.trim()) return;
+    saveFilterPreset({ name: presetName.trim(), filters: draft });
+    setPresetName('');
+  };
 
   return (
     <>
@@ -42,6 +96,71 @@ export function RepositoryFilterDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {recentFilters.length > 0 && (
+            <div>
+              <label className={`${labelClass} flex items-center gap-1`}>
+                <Clock className="w-3 h-3" aria-hidden="true" />
+                Recent
+              </label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {recentFilters.map((f, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => onDraftChange(f)}
+                    className="text-[10px] font-semibold text-white/50 hover:text-jade bg-white/[0.05] hover:bg-jade/10 rounded-full px-2.5 py-1 transition-colors"
+                  >
+                    Filter {i + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {savedFilterPresets.length > 0 && (
+            <div>
+              <label className={`${labelClass} flex items-center gap-1`}>
+                <Bookmark className="w-3 h-3" aria-hidden="true" />
+                Saved Filters
+              </label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {savedFilterPresets.map((p) => (
+                  <span key={p.id} className="flex items-center gap-1 text-[10px] font-semibold text-white/50 bg-white/[0.05] rounded-full pl-2.5 pr-1 py-1">
+                    <button type="button" onClick={() => onDraftChange(p.filters)} className="hover:text-jade transition-colors">
+                      {p.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteFilterPreset(p.id)}
+                      aria-label={`Delete saved filter ${p.name}`}
+                      className="text-white/25 hover:text-red-400 transition-colors p-0.5"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className={labelClass}>Match filters</label>
+            <div className="flex rounded-lg border border-white/[0.08] overflow-hidden mt-1.5 w-fit">
+              {(['AND', 'OR'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onDraftChange({ filterLogic: mode })}
+                  className={`text-[11px] font-bold px-3 py-1.5 transition-colors ${
+                    draft.filterLogic === mode ? 'bg-jade text-noir-800' : 'text-white/50 hover:text-white'
+                  }`}
+                >
+                  {mode === 'AND' ? 'Match ALL (AND)' : 'Match ANY (OR)'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className={labelClass}>Task ID</label>
             <input
@@ -66,44 +185,48 @@ export function RepositoryFilterDrawer({
 
           <div>
             <label className={labelClass}>Task Category</label>
-            <select
-              value={draft.taskCategory}
-              onChange={(e) => onDraftChange({ taskCategory: e.target.value as RepositoryFilters['taskCategory'] })}
-              className={inputBase}
-            >
-              <option value="">All categories</option>
-              {Object.entries(TASK_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
+            <div className="mt-1.5">
+              <MultiSelectDropdown
+                label="categories"
+                options={(Object.keys(TASK_TYPE_LABELS) as TaskType[]).map((t) => ({
+                  value: t, label: TASK_TYPE_LABELS[t], count: counts.category[t] ?? 0,
+                }))}
+                selected={draft.taskCategory}
+                onChange={(v) => onDraftChange({ taskCategory: v as TaskType[] })}
+              />
+            </div>
           </div>
 
           <div>
             <label className={labelClass}>Status</label>
-            <select
-              value={draft.status}
-              onChange={(e) => onDraftChange({ status: e.target.value as RepositoryFilters['status'] })}
-              className={inputBase}
-            >
-              <option value="">All statuses</option>
-              <option value="pending">Pending</option>
-              <option value="in-progress">In Progress</option>
-              <option value="completed">Completed</option>
-            </select>
+            <div className="mt-1.5">
+              <MultiSelectDropdown
+                label="statuses"
+                options={[
+                  { value: 'pending', label: 'Pending', count: counts.status.pending ?? 0 },
+                  { value: 'in-progress', label: 'In Progress', count: counts.status['in-progress'] ?? 0 },
+                  { value: 'completed', label: 'Completed', count: counts.status.completed ?? 0 },
+                ]}
+                selected={draft.status}
+                onChange={(v) => onDraftChange({ status: v as Status[] })}
+              />
+            </div>
           </div>
 
           <div>
             <label className={labelClass}>Priority</label>
-            <select
-              value={draft.priority}
-              onChange={(e) => onDraftChange({ priority: e.target.value as RepositoryFilters['priority'] })}
-              className={inputBase}
-            >
-              <option value="">All priorities</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
+            <div className="mt-1.5">
+              <MultiSelectDropdown
+                label="priorities"
+                options={[
+                  { value: 'low', label: 'Low', count: counts.priority.low ?? 0 },
+                  { value: 'medium', label: 'Medium', count: counts.priority.medium ?? 0 },
+                  { value: 'high', label: 'High', count: counts.priority.high ?? 0 },
+                ]}
+                selected={draft.priority}
+                onChange={(v) => onDraftChange({ priority: v as Priority[] })}
+              />
+            </div>
           </div>
 
           <div>
@@ -165,6 +288,111 @@ export function RepositoryFilterDrawer({
                 aria-label="Due date to"
                 className={inputBase}
               />
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {DUE_DATE_QUICK_RANGES.map(({ label, range }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => applyDueQuickRange(range)}
+                  className="text-[10px] font-semibold text-white/50 hover:text-jade bg-white/[0.05] hover:bg-jade/10 rounded-full px-2.5 py-1 transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {showWorkflowFields && (
+            <div className="pt-3 border-t border-amber-500/20">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400/80 mb-3">
+                Workflow-specific filters
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className={labelClass}>Approval Level</label>
+                  <select
+                    value={draft.workflowApprovalLevel}
+                    onChange={(e) => onDraftChange({ workflowApprovalLevel: e.target.value })}
+                    className={inputBase}
+                  >
+                    <option value="">Any level</option>
+                    {APPROVAL_LEVEL_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>SLA Status</label>
+                  <select
+                    value={draft.workflowSlaStatus}
+                    onChange={(e) => onDraftChange({ workflowSlaStatus: e.target.value as RepositoryFilters['workflowSlaStatus'] })}
+                    className={inputBase}
+                  >
+                    <option value="">Any SLA status</option>
+                    {SLA_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showContractFields && (
+            <div className="pt-3 border-t border-red-500/20">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/80 mb-3">
+                Contract-specific filters
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className={labelClass}>Contract Type</label>
+                  <select
+                    value={draft.contractType}
+                    onChange={(e) => onDraftChange({ contractType: e.target.value })}
+                    className={inputBase}
+                  >
+                    <option value="">Any type</option>
+                    {CONTRACT_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Compliance Status</label>
+                  <select
+                    value={draft.contractComplianceStatus}
+                    onChange={(e) => onDraftChange({ contractComplianceStatus: e.target.value })}
+                    className={inputBase}
+                  >
+                    <option value="">Any status</option>
+                    {COMPLIANCE_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="pt-3 border-t border-white/[0.07]">
+            <label className={labelClass}>Save this filter as…</label>
+            <div className="flex gap-2 mt-1.5">
+              <input
+                type="text"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="e.g. High priority workflow"
+                className={`${inputBase} mt-0 flex-1`}
+              />
+              <button
+                type="button"
+                onClick={handleSavePreset}
+                disabled={!presetName.trim()}
+                className="text-xs font-bold px-3 py-2 rounded-lg bg-jade hover:bg-jade-dark text-noir-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              >
+                Save
+              </button>
             </div>
           </div>
         </div>

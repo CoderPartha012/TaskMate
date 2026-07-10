@@ -1,9 +1,7 @@
 import { Task } from '../types';
 
-let counter = 0;
 function nextId(): string {
-  counter += 1;
-  return `sample-${counter.toString().padStart(3, '0')}-${Math.random().toString(36).slice(2, 8)}`;
+  return crypto.randomUUID();
 }
 
 function daysAgoISO(n: number): string {

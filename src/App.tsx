@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { TaskForm } from './components/TaskForm';
 import { NotificationPanel } from './components/NotificationPanel';
 import { Sidebar } from './components/Sidebar';
@@ -6,8 +6,10 @@ import { RepositoryTableView } from './components/RepositoryTableView';
 import { ReportsPage } from './components/ReportsPage';
 import { TaskDetailPage } from './components/TaskDetailPage';
 import { SettingsPage } from './components/SettingsPage';
+import { ToastContainer } from './components/ToastContainer';
 import { Menu, Undo2, Redo2, Search } from 'lucide-react';
 import { useTaskStore } from './store/taskStore';
+import { useDraftStore } from './store/draftStore';
 import { useNotificationChecker } from './hooks/useNotificationChecker';
 import { useBrowserNotifications } from './hooks/useBrowserNotifications';
 import { motion } from 'framer-motion';
@@ -17,7 +19,7 @@ const Analytics = lazy(() => import('./components/Analytics').then(m => ({ defau
 
 function ChunkLoader() {
   return (
-    <div className="flex items-center justify-center py-20 text-white/25 text-xs">
+    <div className="flex items-center justify-center py-20 text-xs text-white/25">
       Loading…
     </div>
   );
@@ -35,6 +37,10 @@ const SECTION_TITLES = {
 function App() {
   useNotificationChecker();
   useBrowserNotifications();
+
+  useEffect(() => {
+    useDraftStore.getState().expireOldDrafts();
+  }, []);
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,7 +84,7 @@ function App() {
 
       {mobileNavOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-30 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
           onClick={() => setMobileNavOpen(false)}
         />
       )}
@@ -90,11 +96,11 @@ function App() {
               <button
                 onClick={() => setMobileNavOpen(true)}
                 aria-label="Open navigation"
-                className="p-2 rounded-lg text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors lg:hidden"
+                className="p-2 transition-colors rounded-lg text-white/50 hover:text-white/80 hover:bg-white/5 lg:hidden"
               >
                 <Menu className="w-5 h-5" aria-hidden="true" />
               </button>
-              <h1 className="font-display font-bold text-base sm:text-lg text-white tracking-tight whitespace-nowrap">
+              <h1 className="text-base font-bold tracking-tight text-white font-display sm:text-lg whitespace-nowrap">
                 {SECTION_TITLES[activeSection]}
               </h1>
             </div>
@@ -121,7 +127,7 @@ function App() {
                     whileTap={{ scale: 0.9 }}
                     onClick={undo}
                     aria-label="Undo last action"
-                    className="p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white"
+                    className="p-2 text-white rounded-lg bg-white/20 backdrop-blur-sm"
                   >
                     <Undo2 className="w-5 h-5" aria-hidden="true" />
                   </motion.button>
@@ -130,7 +136,7 @@ function App() {
                     whileTap={{ scale: 0.9 }}
                     onClick={redo}
                     aria-label="Redo last action"
-                    className="p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white"
+                    className="p-2 text-white rounded-lg bg-white/20 backdrop-blur-sm"
                   >
                     <Redo2 className="w-5 h-5" aria-hidden="true" />
                   </motion.button>
@@ -145,6 +151,8 @@ function App() {
           </div>
         </div>
       </div>
+
+      <ToastContainer />
     </div>
   );
 }

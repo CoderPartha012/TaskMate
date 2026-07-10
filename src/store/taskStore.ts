@@ -23,6 +23,8 @@ interface TaskState {
   };
   addTask: (task: NewTaskData) => string;
   updateTask: (id: string, updates: Partial<Task>, activityEntries?: NewActivityEntry[]) => void;
+  bulkUpdateTasks: (ids: string[], updates: Partial<Task>) => void;
+  bulkDeleteTasks: (ids: string[]) => void;
   deleteTask: (id: string) => void;
   archiveTask: (id: string) => void;
   restoreTask: (id: string) => void;
@@ -32,6 +34,7 @@ interface TaskState {
   setViewingTaskId: (id: string | null) => void;
   setEditOnOpen: (value: boolean) => void;
   runAITask: (id: string) => void;
+  duplicateTask: (id: string) => string;
   loadSampleData: () => void;
   undo: () => void;
   redo: () => void;
@@ -43,7 +46,7 @@ function makeActivityEntry(entry: NewActivityEntry): ActivityEntry {
 
 export const useTaskStore = create<TaskState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       tasks: [],
       filters: {
         status: 'all',
@@ -142,6 +145,35 @@ export const useTaskStore = create<TaskState>()(
             }
           }
 
+          return {
+            tasks: newTasks,
+            history: {
+              past: [...state.history.past, state.tasks],
+              future: [],
+            },
+          };
+        });
+      },
+      bulkUpdateTasks: (ids, updates) => {
+        set((state) => {
+          const idSet = new Set(ids);
+          const now = new Date().toISOString();
+          const newTasks = state.tasks.map((task) =>
+            idSet.has(task.id) ? { ...task, ...updates, lastModified: now } : task
+          );
+          return {
+            tasks: newTasks,
+            history: {
+              past: [...state.history.past, state.tasks],
+              future: [],
+            },
+          };
+        });
+      },
+      bulkDeleteTasks: (ids) => {
+        set((state) => {
+          const idSet = new Set(ids);
+          const newTasks = state.tasks.filter((task) => !idSet.has(task.id));
           return {
             tasks: newTasks,
             history: {
@@ -318,6 +350,58 @@ export const useTaskStore = create<TaskState>()(
             };
           });
         }, 1500);
+      },
+      duplicateTask: (id) => {
+        const source = get().tasks.find((t) => t.id === id);
+        if (!source) return '';
+
+        const now = new Date().toISOString();
+        const newId = crypto.randomUUID();
+
+        const duplicate: Task = {
+          ...source,
+          id: newId,
+          title: `${source.title} (Copy)`,
+          createdAt: now,
+          lastModified: now,
+          status: 'pending',
+          completedAt: undefined,
+          subtasks: source.subtasks.map((s) => ({ ...s, id: crypto.randomUUID(), completed: false })),
+          comments: [],
+          watchers: [],
+          activeTimerStartedAt: undefined,
+          createdBy: 'You',
+          activityLog: [
+            makeActivityEntry({
+              type: 'created',
+              message: `Duplicated from "${source.title}"`,
+              user: 'You',
+            }),
+          ],
+          aiMeta: source.aiMeta
+            ? { ...source.aiMeta, executionStatus: 'idle', result: '', logs: [], startedAt: undefined, completedAt: undefined }
+            : undefined,
+        };
+
+        set((state) => {
+          const newTasks = [...state.tasks, duplicate];
+          const { addNotification } = useNotificationStore.getState();
+          addNotification({
+            type: 'task_added',
+            taskId: duplicate.id,
+            taskTitle: duplicate.title,
+            message: `Duplicated task — ${duplicate.title}`,
+          });
+          return {
+            tasks: newTasks,
+            history: {
+              past: [...state.history.past, state.tasks],
+              future: [],
+            },
+          };
+        });
+
+        return newId;
       },
       loadSampleData: () => {
         set((state) => {

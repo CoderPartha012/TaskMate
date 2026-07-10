@@ -22,16 +22,16 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
 
   return (
     <aside
-      className={`fixed lg:sticky top-0 left-0 h-screen w-52 shrink-0 bg-noir-900 border-r border-white/[0.07] z-40 flex flex-col transition-transform duration-200 ${
+      className={`fixed lg:sticky top-0 left-0 h-screen w-44 shrink-0 bg-noir-900 border-r border-white/[0.07] z-40 flex flex-col transition-transform duration-200 ${
         mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       }`}
     >
-      <div className="px-5 py-6 flex items-center gap-2 border-b border-white/[0.07]">
+      <div className="px-4 py-6 flex items-center gap-2 border-b border-white/[0.07]">
         <CheckCircle2 className="w-6 h-6 text-jade shrink-0" aria-hidden="true" />
         <span className="font-display font-black text-lg text-jade tracking-tight">TaskMate</span>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-2.5 py-4 space-y-1">
         {SECTIONS.map(({ section, icon, label }) => {
           const isActive = activeSection === section;
           return (
@@ -44,7 +44,7 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
                 onNavigate();
               }}
               aria-current={isActive ? 'page' : undefined}
-              className={`w-full flex items-center gap-3 text-sm font-semibold px-3 py-2.5 rounded-lg transition-colors ${
+              className={`w-full flex items-center gap-2 text-[13px] font-semibold px-2.5 py-2.5 rounded-lg transition-colors ${
                 isActive
                   ? 'bg-jade/10 text-jade border border-jade/25'
                   : 'text-white/45 hover:text-white/80 hover:bg-white/5 border border-transparent'

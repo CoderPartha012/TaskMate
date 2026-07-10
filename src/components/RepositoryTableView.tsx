@@ -1,11 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Filter, AlertTriangle, Sparkles } from 'lucide-react';
-import { Task } from '../types';
+import { Task, Status, Priority, TaskType } from '../types';
 import { useTaskStore } from '../store/taskStore';
-import { RepositoryTable, RepoSortKey } from './RepositoryTable';
+import { useRepositoryViewStore, SavedView } from '../store/repositoryViewStore';
+import { RepositoryTable } from './RepositoryTable';
 import { RepositoryFilterDrawer } from './RepositoryFilterDrawer';
 import { RepositoryPagination } from './RepositoryPagination';
-import { RepositoryFilters, EMPTY_REPOSITORY_FILTERS } from './repositoryFilterTypes';
+import { RepositoryQuickFilters } from './RepositoryQuickFilters';
+import { RepositoryActiveFilterPills } from './RepositoryActiveFilterPills';
+import { RepositorySummaryBar } from './RepositorySummaryBar';
+import { RepositoryColumnsMenu } from './RepositoryColumnsMenu';
+import { RepositoryExportMenu } from './RepositoryExportMenu';
+import { RepositoryBulkActionBar } from './RepositoryBulkActionBar';
+import { RepositorySavedViewTabs } from './RepositorySavedViewTabs';
+import { RepoSortKey, GroupByKey, DateDisplayMode } from './repositoryColumnTypes';
+import {
+  RepositoryFilters, EMPTY_REPOSITORY_FILTERS, QuickFilterKey,
+  applyRepositoryFilters, applyQuickFilter, activeFilterCount,
+} from './repositoryFilterTypes';
 
 const priorityWeight = { low: 0, medium: 1, high: 2 };
 
@@ -21,18 +33,28 @@ export function RepositoryTableView({ tasks, searchTerm }: RepositoryTableViewPr
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const loadSampleData = useTaskStore((s) => s.loadSampleData);
 
+  const columns = useRepositoryViewStore((s) => s.columns);
+  const setColumnWidth = useRepositoryViewStore((s) => s.setColumnWidth);
+  const density = useRepositoryViewStore((s) => s.density);
+  const setDensity = useRepositoryViewStore((s) => s.setDensity);
+  const pushRecentFilter = useRepositoryViewStore((s) => s.pushRecentFilter);
+
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterDraft, setFilterDraft] = useState<RepositoryFilters>(EMPTY_REPOSITORY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<RepositoryFilters>(EMPTY_REPOSITORY_FILTERS);
+  const [quickFilter, setQuickFilter] = useState<QuickFilterKey>('all');
   const [sortKey, setSortKey] = useState<RepoSortKey>('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [groupByKey, setGroupByKey] = useState<GroupByKey | null>(null);
+  const [dateDisplayMode, setDateDisplayMode] = useState<DateDisplayMode>('relative');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, appliedFilters, pageSize]);
+  }, [searchTerm, appliedFilters, quickFilter, pageSize]);
 
   const searched = tasks.filter((t) => {
     if (!searchTerm.trim()) return true;
@@ -44,21 +66,8 @@ export function RepositoryTableView({ tasks, searchTerm }: RepositoryTableViewPr
     );
   });
 
-  const filtered = searched.filter((t) => {
-    const f = appliedFilters;
-    if (f.taskId && !t.id.toLowerCase().includes(f.taskId.toLowerCase())) return false;
-    if (f.taskTitle && !t.title.toLowerCase().includes(f.taskTitle.toLowerCase())) return false;
-    if (f.taskCategory && t.taskType !== f.taskCategory) return false;
-    if (f.status && t.status !== f.status) return false;
-    if (f.priority && t.priority !== f.priority) return false;
-    if (f.assignee && !t.assignees.join(' ').toLowerCase().includes(f.assignee.toLowerCase())) return false;
-    if (f.createdBy && !t.createdBy.toLowerCase().includes(f.createdBy.toLowerCase())) return false;
-    if (f.createdFrom && new Date(t.createdAt) < new Date(f.createdFrom)) return false;
-    if (f.createdTo && new Date(t.createdAt) > new Date(`${f.createdTo}T23:59:59`)) return false;
-    if (f.dueFrom && new Date(t.dueDate) < new Date(f.dueFrom)) return false;
-    if (f.dueTo && new Date(t.dueDate) > new Date(`${f.dueTo}T23:59:59`)) return false;
-    return true;
-  });
+  const quickFiltered = applyQuickFilter(searched, quickFilter);
+  const filtered = applyRepositoryFilters(quickFiltered, appliedFilters);
 
   const sorted = [...filtered].sort((a, b) => {
     let cmp = 0;
@@ -81,6 +90,14 @@ export function RepositoryTableView({ tasks, searchTerm }: RepositoryTableViewPr
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const clampedPage = Math.min(page, totalPages);
   const paginated = sorted.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
+  const tableRows = groupByKey ? sorted : paginated;
+
+  const counts = { category: {} as Partial<Record<TaskType, number>>, status: {} as Partial<Record<Status, number>>, priority: {} as Partial<Record<Priority, number>> };
+  quickFiltered.forEach((t) => {
+    counts.category[t.taskType] = (counts.category[t.taskType] ?? 0) + 1;
+    counts.status[t.status] = (counts.status[t.status] ?? 0) + 1;
+    counts.priority[t.priority] = (counts.priority[t.priority] ?? 0) + 1;
+  });
 
   const handleSort = (key: RepoSortKey) => {
     if (key === sortKey) {
@@ -104,6 +121,7 @@ export function RepositoryTableView({ tasks, searchTerm }: RepositoryTableViewPr
 
   const handleApply = () => {
     setAppliedFilters(filterDraft);
+    pushRecentFilter(filterDraft);
     setFilterOpen(false);
   };
 
@@ -118,12 +136,83 @@ export function RepositoryTableView({ tasks, searchTerm }: RepositoryTableViewPr
     setFilterOpen(false);
   };
 
-  const activeFilterCount = Object.values(appliedFilters).filter(Boolean).length;
+  const handleRemoveFilterField = (patch: Partial<RepositoryFilters>) => {
+    const next = { ...appliedFilters, ...patch };
+    setFilterDraft(next);
+    setAppliedFilters(next);
+  };
+
+  const handleSelectStatus = (status: Status) => {
+    const next = { ...EMPTY_REPOSITORY_FILTERS, status: [status] };
+    setFilterDraft(next);
+    setAppliedFilters(next);
+    setQuickFilter('all');
+  };
+
+  const handleSelectTotal = () => {
+    setFilterDraft(EMPTY_REPOSITORY_FILTERS);
+    setAppliedFilters(EMPTY_REPOSITORY_FILTERS);
+    setQuickFilter('all');
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = tableRows.length > 0 && tableRows.every((t) => next.has(t.id));
+      tableRows.forEach((t) => { if (allSelected) next.delete(t.id); else next.add(t.id); });
+      return next;
+    });
+  };
+
+  const selectAllAcrossPages = () => setSelectedIds(new Set(sorted.map((t) => t.id)));
+
+  const handleApplySavedView = (view: SavedView) => {
+    setFilterDraft(view.filters);
+    setAppliedFilters(view.filters);
+    setQuickFilter(view.quickFilter);
+    setSortKey(view.sortKey);
+    setSortDir(view.sortDir);
+    setGroupByKey(view.groupByKey);
+  };
+
+  const filterCount = activeFilterCount(appliedFilters);
   const taskToDelete = confirmDeleteId ? tasks.find((t) => t.id === confirmDeleteId) : null;
+  const showSelectAcrossPages = !groupByKey && selectedIds.size > 0 && tableRows.length > 0
+    && tableRows.every((t) => selectedIds.has(t.id)) && sorted.length > tableRows.length;
 
   return (
     <div>
-      <div className="flex items-center justify-end gap-3 mb-4">
+      <RepositorySavedViewTabs
+        currentSnapshot={{ filters: appliedFilters, quickFilter, sortKey, sortDir, groupByKey }}
+        onApply={handleApplySavedView}
+      />
+
+      <RepositoryQuickFilters active={quickFilter} onSelect={setQuickFilter} />
+
+      <RepositorySummaryBar
+        tasks={searched}
+        onSelectStatus={handleSelectStatus}
+        onSelectOverdue={() => setQuickFilter('overdue')}
+        onSelectTotal={handleSelectTotal}
+      />
+
+      <RepositoryActiveFilterPills
+        filters={appliedFilters}
+        quickFilter={quickFilter}
+        onRemoveField={handleRemoveFilterField}
+        onRemoveQuickFilter={() => setQuickFilter('all')}
+        onClearAll={() => { handleClearAll(); setQuickFilter('all'); }}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <button
           type="button"
           onClick={loadSampleData}
@@ -133,38 +222,103 @@ export function RepositoryTableView({ tasks, searchTerm }: RepositoryTableViewPr
           <Sparkles className="w-3.5 h-3.5" />
           Load Sample Data
         </button>
-        <button
-          type="button"
-          onClick={() => setFilterOpen(true)}
-          className="relative flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-white/[0.08] text-white/60 hover:text-white hover:border-white/[0.2] transition-colors shrink-0"
-        >
-          <Filter className="w-3.5 h-3.5" />
-          Filters
-          {activeFilterCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center bg-jade text-noir-800 text-[9px] font-bold rounded-full px-1">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={groupByKey ?? ''}
+            onChange={(e) => setGroupByKey(e.target.value ? (e.target.value as GroupByKey) : null)}
+            className="text-xs font-semibold px-2.5 py-2 rounded-lg bg-noir-700 border border-white/[0.08] text-white/60 focus:outline-none focus:border-jade transition-colors"
+          >
+            <option value="">No Grouping</option>
+            <option value="taskType">Group by Category</option>
+            <option value="status">Group by Status</option>
+            <option value="priority">Group by Priority</option>
+            <option value="assignee">Group by Assignee</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => setDateDisplayMode((m) => (m === 'relative' ? 'absolute' : 'relative'))}
+            title="Toggle relative/absolute dates"
+            className="text-xs font-semibold px-3 py-2 rounded-lg border border-white/[0.08] text-white/60 hover:text-white hover:border-white/[0.2] transition-colors"
+          >
+            {dateDisplayMode === 'relative' ? 'Relative Dates' : 'Absolute Dates'}
+          </button>
+
+          <div className="flex items-center rounded-lg border border-white/[0.08] overflow-hidden">
+            {(['compact', 'default', 'comfortable'] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDensity(d)}
+                title={`${d[0].toUpperCase()}${d.slice(1)} density`}
+                className={`text-[10px] font-bold px-2.5 py-2 transition-colors ${
+                  density === d ? 'bg-jade/15 text-jade' : 'text-white/40 hover:text-white'
+                }`}
+              >
+                {d === 'compact' ? 'S' : d === 'default' ? 'M' : 'L'}
+              </button>
+            ))}
+          </div>
+
+          <RepositoryColumnsMenu />
+          <RepositoryExportMenu tasks={sorted} />
+
+          <button
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            className="relative flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-white/[0.08] text-white/60 hover:text-white hover:border-white/[0.2] transition-colors shrink-0"
+          >
+            <Filter className="w-3.5 h-3.5" />
+            Filters
+            {filterCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center bg-jade text-noir-800 text-[9px] font-bold rounded-full px-1">
+                {filterCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
+      {showSelectAcrossPages && (
+        <div className="mb-3 -mt-2">
+          <button
+            type="button"
+            onClick={selectAllAcrossPages}
+            className="text-[11px] font-semibold text-jade hover:text-jade-light transition-colors"
+          >
+            Select all {sorted.length} tasks across all pages
+          </button>
+        </div>
+      )}
+
       <RepositoryTable
-        tasks={paginated}
+        tasks={tableRows}
+        columns={columns}
+        onColumnResize={setColumnWidth}
         sortKey={sortKey}
         sortDir={sortDir}
         onSort={handleSort}
         onView={handleView}
         onEdit={handleEdit}
         onDelete={(id) => setConfirmDeleteId(id)}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleSelectAllOnPage={toggleSelectAllOnPage}
+        density={density}
+        dateDisplayMode={dateDisplayMode}
+        groupByKey={groupByKey}
       />
 
-      <RepositoryPagination
-        page={clampedPage}
-        pageSize={pageSize}
-        total={total}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-      />
+      {!groupByKey && (
+        <RepositoryPagination
+          page={clampedPage}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
+      )}
 
       <RepositoryFilterDrawer
         open={filterOpen}
@@ -174,6 +328,13 @@ export function RepositoryTableView({ tasks, searchTerm }: RepositoryTableViewPr
         onApply={handleApply}
         onReset={handleReset}
         onClearAll={handleClearAll}
+        counts={counts}
+      />
+
+      <RepositoryBulkActionBar
+        selectedIds={Array.from(selectedIds)}
+        tasks={tasks}
+        onClearSelection={() => setSelectedIds(new Set())}
       />
 
       {taskToDelete && (

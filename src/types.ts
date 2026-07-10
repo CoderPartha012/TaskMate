@@ -162,6 +162,7 @@ export interface Task {
   activityLog: ActivityEntry[];
   createdBy: string;
   watchers: string[];
+  activeTimerStartedAt?: string;
 }
 
 export interface TaskFilter {

@@ -2,6 +2,10 @@ import { differenceInCalendarDays } from 'date-fns';
 import { Task } from '../types';
 
 export function getTaskProgress(task: Task): number {
+  if (task.subtasks.length > 0) {
+    const completed = task.subtasks.filter((s) => s.completed).length;
+    return Math.round((completed / task.subtasks.length) * 100);
+  }
   if (task.taskType === 'project' && task.projectMeta) {
     return Math.max(0, Math.min(100, task.projectMeta.progressPercent));
   }
@@ -33,7 +37,7 @@ export function getActualHours(task: Task): number | null {
   if (task.taskType === 'project' && task.projectMeta?.actualHours != null) {
     return task.projectMeta.actualHours;
   }
-  if (task.taskType === 'general' && task.actualTime != null) {
+  if (task.actualTime != null) {
     return Math.round((task.actualTime / 60) * 10) / 10;
   }
   return null;

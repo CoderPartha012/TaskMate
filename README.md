@@ -53,6 +53,8 @@ Instead of one long form, the Add New Task screen opens on a clean category pick
 
 On submit, the app **automatically navigates to the new task's Task Details page**.
 
+📄 Full field-by-field breakdown for all five categories, validation rules, and how each one renders on the Task Details page: [docs/ADD_NEW_TASK.md](docs/ADD_NEW_TASK.md)
+
 ---
 
 ## 📄 Task Details Page
@@ -81,6 +83,8 @@ A single, clean professional data table (no card wrapper — page background sho
 - Row actions: **View** (opens Task Details), **Edit** (opens Task Details already in edit mode), **Delete** (confirm dialog)
 - A **Load Sample Data** button seeds 20 realistic demo tasks across all 5 categories — additive and fully undo-able
 
+📄 Full breakdown of every column, filter field, and pagination behavior: [docs/REPOSITORY.md](docs/REPOSITORY.md)
+
 ---
 
 ## 📊 Analytics Dashboard
@@ -92,6 +96,8 @@ An enterprise BI-style dashboard, entirely computed client-side from your task d
 - A sortable **Team Productivity** table and a global **Recent Activity** feed
 - Global filters (date range, category, status, priority, assignee, created by) and one-click Export (CSV/Excel/PDF)
 - Loading skeletons and empty states throughout
+
+📄 What every chart represents and how it's computed, plus filters and export: [docs/ANALYTICS.md](docs/ANALYTICS.md)
 
 ---
 
