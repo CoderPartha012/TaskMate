@@ -1,14 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, AlertTriangle, X, Save } from 'lucide-react';
-import { useUserProfileStore, UserProfile } from '../../../store/userProfileStore';
+import {
+  useUserProfileStore, UserProfile, UserPreferences, UserAccount, NotificationPreferences,
+} from '../../../store/userProfileStore';
 import { useToastStore } from '../../../store/toastStore';
-import { ProfileLeftNav, ProfileNavKey, PROFILE_NAV_LABELS } from './ProfileLeftNav';
+import { exportProfileData } from '../../../utils/profileDataExport';
+import { ProfileLeftNav, ProfileNavKey } from './ProfileLeftNav';
 import { ProfileBasicInfoCard } from './ProfileBasicInfoCard';
 import { ProfileAdditionalInfoCard } from './ProfileAdditionalInfoCard';
 import { ProfileCompletionPanel } from './ProfileCompletionPanel';
 import { ProfileAboutMePanel } from './ProfileAboutMePanel';
 import { ProfileActivityPanel } from './ProfileActivityPanel';
-import { ProfileComingSoonPanel } from './ProfileComingSoonPanel';
+import { ProfileSecuritySection } from './ProfileSecuritySection';
+import { ProfilePreferencesSection } from './ProfilePreferencesSection';
+import { ProfileAccountSettingsSection } from './ProfileAccountSettingsSection';
+import { ProfileNotificationsSection } from './ProfileNotificationsSection';
 import { ProfileSkeleton } from './ProfileSkeleton';
 
 interface ProfilePageProps {
@@ -22,15 +28,28 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
   const teams = useUserProfileStore((s) => s.teams);
   const joinedAt = useUserProfileStore((s) => s.joinedAt);
   const activityLog = useUserProfileStore((s) => s.activityLog);
+  const preferences = useUserProfileStore((s) => s.preferences);
+  const security = useUserProfileStore((s) => s.security);
+  const account = useUserProfileStore((s) => s.account);
+  const notificationPreferences = useUserProfileStore((s) => s.notificationPreferences);
   const updateProfile = useUserProfileStore((s) => s.updateProfile);
   const setAvatar = useUserProfileStore((s) => s.setAvatar);
   const addSkill = useUserProfileStore((s) => s.addSkill);
   const removeSkill = useUserProfileStore((s) => s.removeSkill);
   const addActivityEntry = useUserProfileStore((s) => s.addActivityEntry);
+  const updatePreferences = useUserProfileStore((s) => s.updatePreferences);
+  const toggleTwoFactor = useUserProfileStore((s) => s.toggleTwoFactor);
+  const recordPasswordChange = useUserProfileStore((s) => s.recordPasswordChange);
+  const updateAccount = useUserProfileStore((s) => s.updateAccount);
+  const verifyEmail = useUserProfileStore((s) => s.verifyEmail);
+  const updateNotificationPreferences = useUserProfileStore((s) => s.updateNotificationPreferences);
 
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<UserProfile>(profile);
   const [avatarDraft, setAvatarDraft] = useState<string | null>(avatarDataUrl);
+  const [preferencesDraft, setPreferencesDraft] = useState<UserPreferences>(preferences);
+  const [accountDraft, setAccountDraft] = useState<UserAccount>(account);
+  const [notificationDraft, setNotificationDraft] = useState<NotificationPreferences>(notificationPreferences);
   const [activeNavKey, setActiveNavKey] = useState<ProfileNavKey>('personal');
 
   useEffect(() => {
@@ -38,15 +57,34 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
     return () => clearTimeout(timer);
   }, []);
 
-  const isDirty = JSON.stringify(draft) !== JSON.stringify(profile) || avatarDraft !== avatarDataUrl;
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(profile)
+    || avatarDraft !== avatarDataUrl
+    || JSON.stringify(preferencesDraft) !== JSON.stringify(preferences)
+    || accountDraft.username !== account.username
+    || JSON.stringify(notificationDraft) !== JSON.stringify(notificationPreferences);
 
   const handleFieldChange = (patch: Partial<UserProfile>) => {
     setDraft((d) => ({ ...d, ...patch }));
   };
 
+  const handlePreferencesChange = (patch: Partial<UserPreferences>) => {
+    setPreferencesDraft((p) => ({ ...p, ...patch }));
+  };
+
+  const handleAccountChange = (patch: Partial<UserAccount>) => {
+    setAccountDraft((a) => ({ ...a, ...patch }));
+  };
+
+  const handleNotificationChange = (patch: Partial<NotificationPreferences>) => {
+    setNotificationDraft((n) => ({ ...n, ...patch }));
+  };
+
   const handleCancel = () => {
     setDraft(profile);
     setAvatarDraft(avatarDataUrl);
+    setPreferencesDraft(preferences);
+    setAccountDraft(account);
+    setNotificationDraft(notificationPreferences);
   };
 
   const handleSave = () => {
@@ -54,8 +92,36 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
     const avatarChanged = avatarDraft !== avatarDataUrl;
     updateProfile(draft);
     if (avatarChanged) setAvatar(avatarDraft);
+    updatePreferences(preferencesDraft);
+    updateAccount({ username: accountDraft.username });
+    updateNotificationPreferences(notificationDraft);
     addActivityEntry(avatarChanged ? 'Changed profile avatar' : 'Updated profile information');
     useToastStore.getState().showToast({ message: 'Profile saved successfully' });
+  };
+
+  const handleVerifyEmail = () => {
+    verifyEmail();
+    setAccountDraft((a) => ({ ...a, emailVerified: true }));
+    addActivityEntry('Verified email address');
+    useToastStore.getState().showToast({ message: 'Email address verified' });
+  };
+
+  const handleDownloadData = () => {
+    exportProfileData({ profile, account, preferences, notificationPreferences, skills, teams, joinedAt });
+    useToastStore.getState().showToast({ message: 'Your data has been downloaded' });
+  };
+
+  const handlePasswordChanged = () => {
+    recordPasswordChange();
+    addActivityEntry('Changed password');
+    useToastStore.getState().showToast({ message: 'Password updated successfully' });
+  };
+
+  const handleToggleTwoFactor = () => {
+    const willEnable = !security.twoFactorEnabled;
+    toggleTwoFactor();
+    addActivityEntry(willEnable ? 'Enabled two-factor authentication' : 'Disabled two-factor authentication');
+    useToastStore.getState().showToast({ message: willEnable ? 'Two-factor authentication enabled' : 'Two-factor authentication disabled' });
   };
 
   if (loading) {
@@ -122,8 +188,29 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
           {activeNavKey === 'activity' && (
             <ProfileActivityPanel entries={activityLog} title="All Activity" />
           )}
-          {activeNavKey !== 'personal' && activeNavKey !== 'activity' && (
-            <ProfileComingSoonPanel title={PROFILE_NAV_LABELS[activeNavKey]} />
+          {activeNavKey === 'security' && (
+            <ProfileSecuritySection
+              security={security}
+              email={draft.email}
+              onToggleTwoFactor={handleToggleTwoFactor}
+              onPasswordChanged={handlePasswordChanged}
+            />
+          )}
+          {activeNavKey === 'preferences' && (
+            <ProfilePreferencesSection draft={preferencesDraft} onChange={handlePreferencesChange} />
+          )}
+          {activeNavKey === 'account' && (
+            <ProfileAccountSettingsSection
+              draft={accountDraft}
+              email={draft.email}
+              joinedAt={joinedAt}
+              onChange={handleAccountChange}
+              onVerifyEmail={handleVerifyEmail}
+              onDownloadData={handleDownloadData}
+            />
+          )}
+          {activeNavKey === 'notifications' && (
+            <ProfileNotificationsSection draft={notificationDraft} onChange={handleNotificationChange} />
           )}
         </div>
 

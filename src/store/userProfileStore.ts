@@ -33,6 +33,72 @@ export interface UserProfile {
   officeLocation: string;
 }
 
+export interface UserPreferences {
+  theme: 'dark' | 'system';
+  compactMode: boolean;
+  dateFormat: string;
+  timeFormat: '12h' | '24h';
+  weekStartsOn: 'monday' | 'sunday';
+  defaultLandingPage: string;
+}
+
+export interface UserSecurity {
+  twoFactorEnabled: boolean;
+  lastPasswordChange: string | null;
+}
+
+export interface UserAccount {
+  username: string;
+  accountId: string;
+  emailVerified: boolean;
+}
+
+export interface NotificationPreferences {
+  emailNotifications: boolean;
+  desktopNotifications: boolean;
+  inAppNotifications: boolean;
+  notifyTaskDueDates: boolean;
+  notifyTaskAssigned: boolean;
+  notifyComments: boolean;
+  notifyStatusChanges: boolean;
+  notifyAIExecutions: boolean;
+  notifyContractWorkflowAlerts: boolean;
+  weeklySummaryEmail: boolean;
+}
+
+const DEFAULT_ACCOUNT: UserAccount = {
+  username: 'alex.morgan',
+  accountId: 'ACC-84213-XQ',
+  emailVerified: true,
+};
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  emailNotifications: true,
+  desktopNotifications: false,
+  inAppNotifications: true,
+  notifyTaskDueDates: true,
+  notifyTaskAssigned: true,
+  notifyComments: true,
+  notifyStatusChanges: false,
+  notifyAIExecutions: true,
+  notifyContractWorkflowAlerts: true,
+  weeklySummaryEmail: false,
+};
+
+const DEFAULT_PREFERENCES: UserPreferences = {
+  theme: 'dark',
+  compactMode: false,
+  dateFormat: 'MM/DD/YYYY',
+  timeFormat: '12h',
+  weekStartsOn: 'monday',
+  defaultLandingPage: 'Repository',
+};
+
+const DEFAULT_SECURITY: UserSecurity = {
+  twoFactorEnabled: true,
+  lastPasswordChange: null,
+};
+
 const DEFAULT_PROFILE: UserProfile = {
   firstName: 'Alex',
   lastName: 'Morgan',
@@ -66,11 +132,21 @@ interface UserProfileState {
   teams: string[];
   joinedAt: string;
   activityLog: ProfileActivityEntry[];
+  preferences: UserPreferences;
+  security: UserSecurity;
+  account: UserAccount;
+  notificationPreferences: NotificationPreferences;
   updateProfile: (patch: Partial<UserProfile>) => void;
   setAvatar: (dataUrl: string | null) => void;
   addSkill: (skill: string) => void;
   removeSkill: (skill: string) => void;
   addActivityEntry: (message: string) => void;
+  updatePreferences: (patch: Partial<UserPreferences>) => void;
+  toggleTwoFactor: () => void;
+  recordPasswordChange: () => void;
+  updateAccount: (patch: Partial<UserAccount>) => void;
+  verifyEmail: () => void;
+  updateNotificationPreferences: (patch: Partial<NotificationPreferences>) => void;
 }
 
 function makeActivityEntry(message: string): ProfileActivityEntry {
@@ -91,6 +167,10 @@ export const useUserProfileStore = create<UserProfileState>()(
         makeActivityEntry('Enabled two-factor authentication'),
         makeActivityEntry('Updated notification preferences'),
       ],
+      preferences: DEFAULT_PREFERENCES,
+      security: DEFAULT_SECURITY,
+      account: DEFAULT_ACCOUNT,
+      notificationPreferences: DEFAULT_NOTIFICATION_PREFERENCES,
 
       updateProfile: (patch) => {
         set((state) => ({ profile: { ...state.profile, ...patch } }));
@@ -112,6 +192,30 @@ export const useUserProfileStore = create<UserProfileState>()(
 
       addActivityEntry: (message) => {
         set((state) => ({ activityLog: [makeActivityEntry(message), ...state.activityLog].slice(0, 30) }));
+      },
+
+      updatePreferences: (patch) => {
+        set((state) => ({ preferences: { ...state.preferences, ...patch } }));
+      },
+
+      toggleTwoFactor: () => {
+        set((state) => ({ security: { ...state.security, twoFactorEnabled: !state.security.twoFactorEnabled } }));
+      },
+
+      recordPasswordChange: () => {
+        set((state) => ({ security: { ...state.security, lastPasswordChange: new Date().toISOString() } }));
+      },
+
+      updateAccount: (patch) => {
+        set((state) => ({ account: { ...state.account, ...patch } }));
+      },
+
+      verifyEmail: () => {
+        set((state) => ({ account: { ...state.account, emailVerified: true } }));
+      },
+
+      updateNotificationPreferences: (patch) => {
+        set((state) => ({ notificationPreferences: { ...state.notificationPreferences, ...patch } }));
       },
     }),
     {
