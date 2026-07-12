@@ -1,6 +1,6 @@
 # TaskMate — Enterprise Task Management Platform
 
-![TaskMate](https://i.postimg.cc/zfSgNgcw/Taskmate.png)
+![TaskMate](https://i.postimg.cc/c4SYbKQ8/jkd.png)
 
 TaskMate is a dark-themed, enterprise-grade task management platform built with React, TypeScript, and Vite. What started as a task tracker has grown into a full mini task management suite: five distinct task categories with their own workflows, a professional data-grid Repository, an 18-section Analytics dashboard, a complete Reports module with a custom report builder and scheduling, and a Settings area with a real Roles & Permissions system — all running entirely client-side, with no backend required.
 
