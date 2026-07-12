@@ -1,12 +1,12 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { TaskForm } from './components/TaskForm';
-import { NotificationPanel } from './components/NotificationPanel';
-import { Sidebar } from './components/Sidebar';
-import { RepositoryTableView } from './components/RepositoryTableView';
-import { ReportsPage } from './components/ReportsPage';
-import { TaskDetailPage } from './components/TaskDetailPage';
-import { SettingsPage } from './components/SettingsPage';
-import { ToastContainer } from './components/ToastContainer';
+import { TaskForm } from './components/task-form/TaskForm';
+import { NotificationPanel } from './components/layout/NotificationPanel';
+import { Sidebar } from './components/layout/Sidebar';
+import { RepositoryTableView } from './components/repository/RepositoryTableView';
+import { ReportsPage } from './components/reports/ReportsPage';
+import { TaskDetailPage } from './components/task-detail/TaskDetailPage';
+import { SettingsPage } from './components/settings/SettingsPage';
+import { ToastContainer } from './components/layout/ToastContainer';
 import { Menu, Undo2, Redo2, Search } from 'lucide-react';
 import { useTaskStore } from './store/taskStore';
 import { useDraftStore } from './store/draftStore';
@@ -15,7 +15,9 @@ import { useBrowserNotifications } from './hooks/useBrowserNotifications';
 import { motion } from 'framer-motion';
 
 // Heavy components — loaded only when first needed
-const Analytics = lazy(() => import('./components/Analytics').then(m => ({ default: m.Analytics })));
+const Analytics = lazy(() => import('./components/analytics/Analytics').then(m => ({ default: m.Analytics })));
+const CalendarPage = lazy(() => import('./components/calendar/CalendarPage').then(m => ({ default: m.CalendarPage })));
+const AIExecutionPage = lazy(() => import('./components/ai-execution/AIExecutionPage').then(m => ({ default: m.AIExecutionPage })));
 
 function ChunkLoader() {
   return (
@@ -30,6 +32,8 @@ const SECTION_TITLES = {
   repository: 'Repository',
   analytics: 'Analytics',
   reports: 'Reports',
+  calendar: 'Calendar',
+  'ai-execution': 'AI Execution',
   'task-detail': 'Task Details',
   settings: 'Settings',
 } as const;
@@ -45,7 +49,7 @@ function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const { tasks, filters, activeSection, viewingTaskId, undo, redo } = useTaskStore();
+  const { tasks, filters, activeSection, viewingTaskId, undo, redo, settingsResetToken } = useTaskStore();
 
   const renderSection = () => {
     switch (activeSection) {
@@ -63,10 +67,22 @@ function App() {
         );
       case 'reports':
         return <ReportsPage />;
+      case 'calendar':
+        return (
+          <Suspense fallback={<ChunkLoader />}>
+            <CalendarPage />
+          </Suspense>
+        );
+      case 'ai-execution':
+        return (
+          <Suspense fallback={<ChunkLoader />}>
+            <AIExecutionPage />
+          </Suspense>
+        );
       case 'task-detail':
         return <TaskDetailPage taskId={viewingTaskId} />;
       case 'settings':
-        return <SettingsPage />;
+        return <SettingsPage key={settingsResetToken} />;
       case 'repository':
       default:
         return (
@@ -120,7 +136,7 @@ function App() {
             )}
 
             <div className="flex items-center gap-2 shrink-0">
-              {activeSection !== 'repository' && activeSection !== 'analytics' && activeSection !== 'reports' && activeSection !== 'settings' && (
+              {activeSection === 'task-detail' && (
                 <>
                   <motion.button
                     whileHover={{ scale: 1.1 }}

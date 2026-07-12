@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { Task } from '../types';
-import { TASK_TYPE_SHORT } from '../components/TaskTypeSelector';
+import { TASK_TYPE_SHORT } from '../components/common/TaskTypeSelector';
 import {
   ReportColumnKey, ReportConfig, ReportFilters, GroupByKey, ScheduleFrequency,
 } from '../types/report.types';

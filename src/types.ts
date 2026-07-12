@@ -2,9 +2,16 @@ export type Priority = 'low' | 'medium' | 'high';
 export type Status = 'pending' | 'in-progress' | 'completed';
 export type Category = 'work' | 'personal' | 'urgent' | 'other';
 export type RecurrencePattern = 'none' | 'daily' | 'weekly' | 'monthly';
-export type AppSection = 'add-task' | 'repository' | 'analytics' | 'reports' | 'task-detail' | 'settings';
+export type AppSection = 'add-task' | 'repository' | 'analytics' | 'reports' | 'calendar' | 'ai-execution' | 'task-detail' | 'settings';
 
 export type TaskType = 'general' | 'workflow' | 'project' | 'ai' | 'contract';
+
+export interface AttachmentVersion {
+  dataUrl: string;
+  size: number; // bytes
+  uploadedBy: string;
+  uploadedAt: string;
+}
 
 export interface TaskAttachment {
   id: string;
@@ -14,6 +21,8 @@ export interface TaskAttachment {
   dataUrl: string;
   uploadedBy: string;
   uploadedAt: string;
+  versions?: AttachmentVersion[]; // prior versions, newest first — current file is represented by this attachment's own top-level fields
+  obligationId?: string; // set when uploaded from inside an Obligation drawer
 }
 
 export type ActivityType =
@@ -65,6 +74,21 @@ export interface ProjectMeta {
 
 export type AIExecutionStatus = 'idle' | 'running' | 'success' | 'failed';
 
+export interface AIExecutionRun {
+  id: string;
+  startedAt: string;
+  completedAt?: string;
+  status: AIExecutionStatus;
+  prompt: string;
+  result: string;
+  logs: string[];
+  durationMs?: number;
+  retryCount: number;
+  tokenUsage?: number;
+  model: string;
+  temperature?: number;
+}
+
 export interface AIMeta {
   model: string;
   prompt: string;
@@ -80,6 +104,8 @@ export interface AIMeta {
   logs: string[];
   startedAt?: string;
   completedAt?: string;
+  temperature?: number;
+  executionHistory?: AIExecutionRun[];
 }
 
 export interface ContractMeta {
@@ -131,6 +157,40 @@ export interface Subtask {
   completed: boolean;
 }
 
+export type ObligationStatus = 'upcoming' | 'due-soon' | 'overdue' | 'completed';
+
+export interface ObligationComment {
+  id: string;
+  user: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface ObligationHistoryEntry {
+  id: string;
+  message: string;
+  user: string;
+  timestamp: string;
+}
+
+export interface Obligation {
+  id: string;
+  title: string;
+  description: string;
+  notes: string;
+  owner: string;
+  dueDate: string;
+  reminderDate?: string;
+  status: ObligationStatus;
+  priority: Priority;
+  progress: number; // 0-100
+  comments: ObligationComment[];
+  history: ObligationHistoryEntry[];
+  createdAt: string;
+  createdBy: string;
+  completedAt?: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -163,6 +223,7 @@ export interface Task {
   createdBy: string;
   watchers: string[];
   activeTimerStartedAt?: string;
+  obligations?: Obligation[];
 }
 
 export interface TaskFilter {

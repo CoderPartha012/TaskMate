@@ -1,9 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ColumnConfig, DEFAULT_COLUMNS, Density, GroupByKey, RepoSortKey } from '../components/repositoryColumnTypes';
-import { QuickFilterKey, RepositoryFilters, isFiltersEmpty } from '../components/repositoryFilterTypes';
-
-export type { Density };
+import { ColumnConfig, DEFAULT_COLUMNS, GroupByKey, RepoSortKey } from '../components/repository/repositoryColumnTypes';
+import { QuickFilterKey, RepositoryFilters, isFiltersEmpty } from '../components/repository/repositoryFilterTypes';
 
 export interface SavedView {
   id: string;
@@ -27,7 +25,6 @@ const MAX_RECENT_FILTERS = 5;
 
 interface RepositoryViewState {
   columns: ColumnConfig[];
-  density: Density;
   savedViews: SavedView[];
   savedFilterPresets: SavedFilterPreset[];
   recentFilters: RepositoryFilters[];
@@ -36,7 +33,6 @@ interface RepositoryViewState {
   moveColumn: (key: RepoSortKey, direction: 'up' | 'down') => void;
   setColumnWidth: (key: RepoSortKey, width: number) => void;
   resetColumns: () => void;
-  setDensity: (density: Density) => void;
 
   saveView: (view: Omit<SavedView, 'id' | 'createdAt'>) => void;
   deleteView: (id: string) => void;
@@ -51,7 +47,6 @@ export const useRepositoryViewStore = create<RepositoryViewState>()(
   persist(
     (set) => ({
       columns: DEFAULT_COLUMNS,
-      density: 'default',
       savedViews: [],
       savedFilterPresets: [],
       recentFilters: [],
@@ -81,8 +76,6 @@ export const useRepositoryViewStore = create<RepositoryViewState>()(
       },
 
       resetColumns: () => set({ columns: DEFAULT_COLUMNS }),
-
-      setDensity: (density) => set({ density }),
 
       saveView: (view) => {
         set((state) => ({
@@ -127,7 +120,6 @@ export const useRepositoryViewStore = create<RepositoryViewState>()(
         if (!state?.columns || state.columns.length === 0) {
           state.columns = DEFAULT_COLUMNS;
         }
-        if (!state?.density) state.density = 'default';
         if (!state?.savedViews) state.savedViews = [];
         if (!state?.savedFilterPresets) state.savedFilterPresets = [];
         if (!state?.recentFilters) state.recentFilters = [];

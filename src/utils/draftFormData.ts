@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { Priority, Category, RecurrencePattern, Status, TaskType } from '../types';
 import { TaskDraft } from '../types/draft.types';
-import { WORKFLOW_FIELDS, PROJECT_FIELDS, AI_FIELDS, CONTRACT_FIELDS } from '../components/metaFieldConfigs';
+import { WORKFLOW_FIELDS, PROJECT_FIELDS, AI_FIELDS, CONTRACT_FIELDS } from '../components/common/metaFieldConfigs';
 
 export interface DraftAttachmentMeta {
   name: string;

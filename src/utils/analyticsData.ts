@@ -5,6 +5,7 @@ import {
 } from 'date-fns';
 import { ActivityEntry, Task, TaskType } from '../types';
 import { getWorkflowSLAStatus, getContractAlert } from './taskAlerts';
+import { AnalyticsFilters, applyAnalyticsFilters } from '../components/analytics/analyticsFilterTypes';
 
 export type Granularity = 'daily' | 'weekly' | 'monthly';
 
@@ -54,16 +55,47 @@ export function pctChange(curr: number, prev: number): number | null {
   return Math.round(((curr - prev) / prev) * 100);
 }
 
-export function splitByTrailingPeriod(tasks: Task[], days = 30): { current: Task[]; previous: Task[] } {
+export interface ComparisonWindows {
+  currentStart: Date;
+  currentEnd: Date;
+  previousStart: Date;
+  previousEnd: Date;
+}
+
+export function getComparisonWindows(filters: AnalyticsFilters): ComparisonWindows {
   const now = new Date();
-  const currentStart = subDays(now, days);
-  const previousStart = subDays(now, days * 2);
-  const current = tasks.filter((t) => new Date(t.createdAt) >= currentStart);
-  const previous = tasks.filter((t) => {
-    const d = new Date(t.createdAt);
-    return d >= previousStart && d < currentStart;
-  });
-  return { current, previous };
+
+  if (filters.dateFrom && filters.dateTo) {
+    const currentStart = new Date(filters.dateFrom);
+    const currentEnd = new Date(`${filters.dateTo}T23:59:59`);
+    const durationMs = currentEnd.getTime() - currentStart.getTime();
+    const previousEnd = new Date(currentStart.getTime() - 1);
+    const previousStart = new Date(previousEnd.getTime() - durationMs);
+    return { currentStart, currentEnd, previousStart, previousEnd };
+  }
+
+  const currentStart = subDays(now, 30);
+  const previousStart = subDays(now, 60);
+  const previousEnd = new Date(currentStart.getTime() - 1);
+  return { currentStart, currentEnd: now, previousStart, previousEnd };
+}
+
+function withDateWindow(filters: AnalyticsFilters, from: Date, to: Date): AnalyticsFilters {
+  return { ...filters, dateFrom: from.toISOString().slice(0, 10), dateTo: to.toISOString().slice(0, 10) };
+}
+
+export function getComparisonTaskSets(activeTasks: Task[], filters: AnalyticsFilters): { current: Task[]; previous: Task[]; windows: ComparisonWindows } {
+  const windows = getComparisonWindows(filters);
+  const current = applyAnalyticsFilters(activeTasks, withDateWindow(filters, windows.currentStart, windows.currentEnd));
+  const previous = applyAnalyticsFilters(activeTasks, withDateWindow(filters, windows.previousStart, windows.previousEnd));
+  return { current, previous, windows };
+}
+
+export function formatComparisonLabel(windows: ComparisonWindows, hasCustomDateFilter: boolean): string {
+  if (hasCustomDateFilter) {
+    return `vs. ${format(windows.previousStart, 'MMM d')}–${format(windows.previousEnd, 'MMM d')}`;
+  }
+  return 'vs. previous 30 days';
 }
 
 // ─── Breakdown charts ─────────────────────────────────────────────────────
@@ -75,8 +107,6 @@ export function getStatusBreakdown(tasks: Task[]): NamedValue[] {
     { name: 'Pending', value: counts.pending },
     { name: 'In Progress', value: counts['in-progress'] },
     { name: 'Completed', value: counts.completed },
-    { name: 'On Hold', value: 0 },
-    { name: 'Cancelled', value: 0 },
   ];
 }
 
@@ -87,7 +117,6 @@ export function getPriorityBreakdown(tasks: Task[]): NamedValue[] {
     { name: 'Low', value: counts.low },
     { name: 'Medium', value: counts.medium },
     { name: 'High', value: counts.high },
-    { name: 'Critical', value: 0 },
   ];
 }
 
@@ -117,6 +146,31 @@ export function getAssigneeWorkload(tasks: Task[]): NamedValue[] {
   return [...counts.entries()]
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
+}
+
+export interface AssigneeStatusRow {
+  name: string;
+  pending: number;
+  inProgress: number;
+  completed: number;
+  total: number;
+}
+
+export function getAssigneeWorkloadByStatus(tasks: Task[]): AssigneeStatusRow[] {
+  const map = new Map<string, { pending: number; inProgress: number; completed: number }>();
+  tasks.forEach((t) => {
+    const names = t.assignees.length > 0 ? t.assignees : ['Unassigned'];
+    names.forEach((n) => {
+      if (!map.has(n)) map.set(n, { pending: 0, inProgress: 0, completed: 0 });
+      const row = map.get(n)!;
+      if (t.status === 'pending') row.pending++;
+      else if (t.status === 'in-progress') row.inProgress++;
+      else row.completed++;
+    });
+  });
+  return [...map.entries()]
+    .map(([name, counts]) => ({ name, ...counts, total: counts.pending + counts.inProgress + counts.completed }))
+    .sort((a, b) => b.total - a.total);
 }
 
 export function getDueDateTimeline(tasks: Task[]): NamedValue[] {
@@ -176,14 +230,14 @@ function bucketKey(d: Date, granularity: Granularity): string {
 export function generateTrend(
   tasks: Task[],
   dateField: 'createdAt' | 'completedAt' | 'dueDate',
-  granularity: Granularity
+  granularity: Granularity,
+  anchor: Date = new Date()
 ): { date: string; count: number }[] {
-  const now = new Date();
   const numPoints = granularity === 'daily' ? 14 : 12;
   const points: { key: string; label: string }[] = [];
 
   for (let i = numPoints - 1; i >= 0; i--) {
-    const d = granularity === 'daily' ? subDays(now, i) : granularity === 'weekly' ? subWeeks(now, i) : subMonths(now, i);
+    const d = granularity === 'daily' ? subDays(anchor, i) : granularity === 'weekly' ? subWeeks(anchor, i) : subMonths(anchor, i);
     points.push({
       key: bucketKey(d, granularity),
       label: granularity === 'monthly' ? format(d, 'MMM yyyy') : format(d, 'MMM d'),
@@ -201,6 +255,15 @@ export function generateTrend(
   });
 
   return points.map((p) => ({ date: p.label, count: counts.get(p.key) || 0 }));
+}
+
+export function withMovingAverage<T extends { count: number }>(points: T[], windowSize = 3): (T & { ma: number | null })[] {
+  return points.map((p, i) => {
+    if (i < windowSize - 1) return { ...p, ma: null };
+    const window = points.slice(i - windowSize + 1, i + 1);
+    const avg = window.reduce((s, w) => s + w.count, 0) / window.length;
+    return { ...p, ma: Math.round(avg * 10) / 10 };
+  });
 }
 
 export function getOverdueTrend(tasks: Task[], granularity: Granularity) {

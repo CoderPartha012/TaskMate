@@ -1,8 +1,16 @@
 import { create } from 'zustand';
-import { ActivityEntry, AppSection, Comment, Task, TaskFilter, ThemeConfig } from '../types';
+import { ActivityEntry, AIExecutionRun, AppSection, Comment, Task, TaskFilter, ThemeConfig } from '../types';
 import { persist } from 'zustand/middleware';
 import { useNotificationStore } from './notificationStore';
 import { generateSampleTasks } from '../utils/sampleData';
+import { simulateAIExecution } from '../utils/aiSimulation';
+import { RepositoryFilters, QuickFilterKey } from '../components/repository/repositoryFilterTypes';
+import type { TaskDetailTabKey } from '../components/task-detail/TaskDetailTabs';
+
+export interface PendingRepositoryHandoff {
+  filters: RepositoryFilters;
+  quickFilter: QuickFilterKey;
+}
 
 type NewTaskData = Omit<Task, 'id' | 'createdAt' | 'lastModified' | 'subtasks' | 'archived' | 'comments' | 'activityLog' | 'createdBy' | 'watchers'> & {
   initialComment?: string;
@@ -17,6 +25,9 @@ interface TaskState {
   activeSection: AppSection;
   viewingTaskId: string | null;
   editOnOpen: boolean;
+  pendingRepositoryHandoff: PendingRepositoryHandoff | null;
+  pendingTaskDetailTab: TaskDetailTabKey | null;
+  settingsResetToken: number;
   history: {
     past: Task[][];
     future: Task[][];
@@ -33,6 +44,9 @@ interface TaskState {
   setActiveSection: (section: AppSection) => void;
   setViewingTaskId: (id: string | null) => void;
   setEditOnOpen: (value: boolean) => void;
+  setPendingRepositoryHandoff: (handoff: PendingRepositoryHandoff | null) => void;
+  setPendingTaskDetailTab: (tab: TaskDetailTabKey | null) => void;
+  resetSettingsView: () => void;
   runAITask: (id: string) => void;
   duplicateTask: (id: string) => string;
   loadSampleData: () => void;
@@ -61,6 +75,9 @@ export const useTaskStore = create<TaskState>()(
       activeSection: 'repository',
       viewingTaskId: null,
       editOnOpen: false,
+      pendingRepositoryHandoff: null,
+      pendingTaskDetailTab: null,
+      settingsResetToken: 0,
       history: {
         past: [],
         future: [],
@@ -266,6 +283,15 @@ export const useTaskStore = create<TaskState>()(
       setEditOnOpen: (value) => {
         set({ editOnOpen: value });
       },
+      setPendingRepositoryHandoff: (handoff) => {
+        set({ pendingRepositoryHandoff: handoff });
+      },
+      setPendingTaskDetailTab: (tab) => {
+        set({ pendingTaskDetailTab: tab });
+      },
+      resetSettingsView: () => {
+        set((state) => ({ settingsResetToken: state.settingsResetToken + 1 }));
+      },
       runAITask: (id) => {
         const startedAt = new Date().toISOString();
         set((state) => ({
@@ -296,29 +322,36 @@ export const useTaskStore = create<TaskState>()(
             const task = state.tasks.find((t) => t.id === id);
             if (!task?.aiMeta) return state;
 
-            const threshold = task.aiMeta.confidenceThreshold ?? 70;
-            const confidence = Math.round(40 + Math.random() * 60);
-            const success = confidence >= threshold;
-            const time = new Date().toLocaleTimeString();
+            const sim = simulateAIExecution({
+              model: task.aiMeta.model,
+              prompt: task.aiMeta.prompt,
+              outputType: task.aiMeta.outputType,
+              confidenceThreshold: task.aiMeta.confidenceThreshold,
+            });
+            const logs = [...task.aiMeta.logs, ...sim.logLines];
+            const completedAt = new Date().toISOString();
 
-            const logs = [
-              ...task.aiMeta.logs,
-              `[${time}] Model "${task.aiMeta.model || 'default'}" processing prompt…`,
-              `[${time}] Confidence score: ${confidence}%`,
-              success
-                ? `[${time}] Execution completed successfully.`
-                : `[${time}] Execution failed — confidence below threshold (${threshold}%).`,
-            ];
-            const result = success
-              ? `Simulated ${task.aiMeta.outputType || 'text'} output for: "${task.aiMeta.prompt.slice(0, 80)}${task.aiMeta.prompt.length > 80 ? '…' : ''}"`
-              : '';
+            const run: AIExecutionRun = {
+              id: crypto.randomUUID(),
+              startedAt: task.aiMeta.startedAt ?? startedAt,
+              completedAt,
+              status: sim.success ? 'success' : 'failed',
+              prompt: task.aiMeta.prompt,
+              result: sim.result,
+              logs: sim.logLines,
+              durationMs: new Date(completedAt).getTime() - new Date(task.aiMeta.startedAt ?? startedAt).getTime(),
+              retryCount: 0,
+              tokenUsage: sim.tokenUsage,
+              model: task.aiMeta.model,
+              temperature: task.aiMeta.temperature,
+            };
 
             const { addNotification } = useNotificationStore.getState();
             addNotification({
-              type: success ? 'completed' : 'status_changed',
+              type: sim.success ? 'completed' : 'status_changed',
               taskId: task.id,
               taskTitle: task.title,
-              message: success
+              message: sim.success
                 ? `AI task "${task.title}" executed successfully`
                 : `AI task "${task.title}" execution failed`,
             });
@@ -330,16 +363,17 @@ export const useTaskStore = create<TaskState>()(
                       ...t,
                       aiMeta: {
                         ...t.aiMeta,
-                        executionStatus: success ? 'success' : 'failed',
-                        result,
+                        executionStatus: sim.success ? 'success' : 'failed',
+                        result: sim.result,
                         logs,
-                        completedAt: new Date().toISOString(),
+                        completedAt,
+                        executionHistory: [run, ...(t.aiMeta.executionHistory ?? [])],
                       },
                       activityLog: [
                         ...t.activityLog,
                         makeActivityEntry({
                           type: 'ai_execution_completed',
-                          message: success ? 'AI execution completed successfully' : 'AI execution failed',
+                          message: sim.success ? 'AI execution completed successfully' : 'AI execution failed',
                           user: 'You',
                         }),
                       ],
@@ -480,6 +514,9 @@ export const useTaskStore = create<TaskState>()(
         }
         if (!state?.activeSection) {
           state.activeSection = 'repository';
+        }
+        if (state && !state.pendingRepositoryHandoff) {
+          state.pendingRepositoryHandoff = null;
         }
         return state;
       },
